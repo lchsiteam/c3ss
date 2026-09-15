@@ -199,6 +199,7 @@
   }
 
   const dismissIntro = () => {
+    localStorage.setItem(scholarshipIntroStorageKey, "true")
     showIntro = false
   }
 
@@ -324,6 +325,7 @@
   }
 
   const startTutorial = async () => {
+    localStorage.setItem(scholarshipIntroStorageKey, "true")
     tutorialState = {
       searchTerm,
       selectedFilters: [...selectedFilters],
@@ -404,7 +406,6 @@
       if (localStorage.getItem(scholarshipIntroStorageKey)) return
 
       showIntro = true
-      localStorage.setItem(scholarshipIntroStorageKey, "true")
     } catch {
       showIntro = true
     }
