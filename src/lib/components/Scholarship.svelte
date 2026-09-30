@@ -76,7 +76,7 @@
       {/if}
     </div>
     <div class="deadline">
-      <span class={`countdown ${countdownClass()}`}>
+      <span class={`countdown ${countdownClass()}`} style={(props.deadline === "Rolling Deadline") ? "display: none;" : ""}>
         {countdownLabel()}
       </span>
       <div class="deadline-text">

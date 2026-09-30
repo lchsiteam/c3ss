@@ -134,7 +134,7 @@ export class Scholarship implements ScholarshipDTO {
 
   formattedDeadline() {
     const date = this.deadlineDate
-    return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
+    return this.deadline ? `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}` : "Rolling Deadline"
   }
 
   daysUntil(reference: Date = new Date()) {
