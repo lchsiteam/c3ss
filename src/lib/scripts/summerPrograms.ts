@@ -1,3 +1,10 @@
+import {
+  applicationDateIsFuture,
+  daysUntilApplicationDate,
+  formatApplicationDate,
+  parseApplicationDate,
+} from "./applicationDates"
+
 export const FILTER_COLORS = {
   cyan: "#52cfeb",
   red: "#eb5752",
@@ -62,6 +69,8 @@ export type SummerDTO = {
   created: string | null
   description: string | null
   deadline: string | null
+  openDate?: string | null
+  openUnknown?: boolean | null
   start_date: string | null
   primary_link: string | null
   filters?: unknown
@@ -84,6 +93,8 @@ export class Summer implements SummerDTO {
   created: string | null
   description: string
   deadline: string | null
+  openDate?: string | null
+  openUnknown: boolean
   start_date: string | null
   primary_link: string | null
   filters: SummerFilterKey[]
@@ -95,6 +106,8 @@ export class Summer implements SummerDTO {
     this.created = dto.created
     this.description = dto.description ?? "No description available."
     this.deadline = dto.deadline
+    this.openDate = dto.openDate ?? null
+    this.openUnknown = dto.openUnknown === true
     this.start_date = dto.start_date
     this.primary_link = dto.primary_link
     this.filters = normalizeFilters(dto.filters)
@@ -107,17 +120,23 @@ export class Summer implements SummerDTO {
   }
 
   get rollingDeadlineDate(): Date | null {
-    if (!this.start_date) return null
-
-    const date = new Date(this.start_date)
-    return Number.isNaN(date.getTime()) ? null : date
+    return parseApplicationDate(this.start_date)
   }
 
   get deadlineDate(): Date | null {
-    if (!this.deadline) return null
+    return parseApplicationDate(this.deadline)
+  }
 
-    const date = new Date(this.deadline)
-    return Number.isNaN(date.getTime()) ? null : date
+  get openDateDate(): Date | null {
+    return parseApplicationDate(this.openDate)
+  }
+
+  openDateIsFuture(reference: Date = new Date()) {
+    return applicationDateIsFuture(this.openDate, reference)
+  }
+
+  formattedOpenDate() {
+    return formatApplicationDate(this.openDate)
   }
 
   rollingFormattedDeadline() {
@@ -183,16 +202,7 @@ export class Summer implements SummerDTO {
   }
 
   daysUntil(reference: Date = new Date()) {
-    const target = this.deadlineDate
-    if (!target) return null
-
-    const msPerDay = 1000 * 60 * 60 * 24
-    const today = new Date(reference)
-    today.setHours(0, 0, 0, 0)
-
-    target.setHours(0, 0, 0, 0)
-
-    return Math.ceil((target.getTime() - today.getTime()) / msPerDay)
+    return daysUntilApplicationDate(this.deadline, reference)
   }
 
   countdownClass(reference?: Date) {
@@ -226,6 +236,8 @@ export class Summer implements SummerDTO {
       created: this.created,
       description: this.description,
       deadline: this.deadline,
+      openDate: this.openDate,
+      openUnknown: this.openUnknown,
       start_date: this.start_date,
       primary_link: this.primary_link,
       filters: this.filters,

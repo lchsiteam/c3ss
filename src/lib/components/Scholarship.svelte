@@ -5,7 +5,9 @@
   interface Props {
     name: string
     deadline: string
-    daysLeft: number
+    openDate?: string | null
+    openUnknown?: boolean
+    daysLeft: number | null
     description: string
     endowmentRange?: string | null
     filters?: ScholarshipFilter[]
@@ -17,13 +19,19 @@
   let isDescriptionClipped = $state(false)
 
   const countdownClass = () => {
+    if (props.daysLeft === null) return "calm"
     if (props.daysLeft < 0) return "passed"
     if (props.daysLeft <= 3) return "hot"
     if (props.daysLeft <= 10) return "warm"
     return "calm"
   }
 
-  const countdownLabel = () => (props.daysLeft < 0 ? "Passed" : `${props.daysLeft}d`)
+  const countdownLabel = () =>
+    props.daysLeft === null
+      ? "No deadline"
+      : props.daysLeft < 0
+        ? "Passed"
+        : `${props.daysLeft}d`
 
   const handleKeydown = (event: KeyboardEvent) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -75,15 +83,26 @@
         </div>
       {/if}
     </div>
-    <div class="deadline">
-      <span class={`countdown ${countdownClass()}`} style={(props.deadline === "Rolling Deadline") ? "display: none;" : ""}>
-        {countdownLabel()}
-      </span>
-      <div class="deadline-text">
-        <span>Deadline</span>
-        <strong>{props.deadline}</strong>
+    {#if props.openUnknown}
+      <div class="deadline">
+        <div class="deadline-text">
+          <strong>Not Released</strong>
+        </div>
       </div>
-    </div>
+    {:else}
+      <div class="deadline">
+        <span class={`countdown ${countdownClass()}`} style={(props.deadline === "Rolling Deadline") ? "display: none;" : ""}>
+          {countdownLabel()}
+        </span>
+        <div class="deadline-text">
+          <span>Deadline</span>
+          <strong>{props.deadline}</strong>
+          {#if props.openDate}
+            <span class="open-date">Opens {props.openDate}</span>
+          {/if}
+        </div>
+      </div>
+    {/if}
   </div>
 
   <div class="description-block">
@@ -216,6 +235,14 @@
       font-weight: 800;
       color: $primary;
     }
+  }
+
+  .deadline-text .open-date {
+    margin-top: 0.25rem;
+    color: $text;
+    font-size: 0.72rem;
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .countdown {

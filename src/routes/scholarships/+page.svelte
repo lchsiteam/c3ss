@@ -11,6 +11,10 @@
     type ScholarshipFilter,
     type ScholarshipFilterKey,
   } from "$lib/scripts/scholarships"
+  import {
+    compareApplicationSchedule,
+    sortByApplicationSchedule,
+  } from "$lib/scripts/applicationDates"
   import Search from "$lib/components/Search.svelte"
   import FilterSelect from "$lib/components/FilterSelect.svelte"
   import { browser } from "$app/environment"
@@ -157,9 +161,11 @@
     term: string,
     source: Scholarship[],
   ): Scholarship[] => {
+    const reference = new Date()
+    const scheduled = sortByApplicationSchedule(source, reference)
     const query = term.trim()
 
-    if (!query) return [...source]
+    if (!query) return scheduled
 
     return [...source]
       .map((scholarship) => ({
@@ -167,7 +173,13 @@
         similarity: fuzzy(query, scholarship.name),
       }))
       .sort(
-        (firstItem, secondItem) => secondItem.similarity - firstItem.similarity,
+        (firstItem, secondItem) =>
+          compareApplicationSchedule(
+            firstItem.scholarship,
+            secondItem.scholarship,
+            reference,
+          ) ||
+          secondItem.similarity - firstItem.similarity,
       )
       .map(({ scholarship }) => scholarship)
   }
@@ -601,6 +613,8 @@
           onclick={(event) => openScholarship(scholarship, event)}
           name={scholarship.name}
           deadline={scholarship.formattedDeadline()}
+          openDate={scholarship.openDateIsFuture() ? scholarship.formattedOpenDate() : null}
+          openUnknown={scholarship.openUnknown}
           daysLeft={scholarship.daysUntil()}
           description={scholarship.description}
           endowmentRange={scholarship.endowmentRange()}
@@ -634,17 +648,31 @@
           </div>
         {/if}
 
-        <div class="detail-tile">
-          <span>Deadline</span>
-          <strong>{activeScholarship.formattedDeadline()}</strong>
-        </div>
+        {#if activeScholarship.openUnknown}
+          <div class="detail-tile">
+            <span>Deadline</span>
+            <strong>Not Released</strong>
+          </div>
+        {:else}
+          <div class="detail-tile">
+            <span>Deadline</span>
+            <strong>{activeScholarship.formattedDeadline()}</strong>
+          </div>
 
-        <div class="detail-tile">
-          <span>Status</span>
-          <strong class={`countdown ${activeScholarship.countdownClass()}`}>
-            {activeScholarship.countdownLabel()}
-          </strong>
-        </div>
+          {#if activeScholarship.openDateIsFuture() && activeScholarship.formattedOpenDate()}
+            <div class="detail-tile">
+              <span>Opens</span>
+              <strong>{activeScholarship.formattedOpenDate()}</strong>
+            </div>
+          {/if}
+
+          <div class="detail-tile">
+            <span>Status</span>
+            <strong class={`countdown ${activeScholarship.countdownClass()}`}>
+              {activeScholarship.countdownLabel()}
+            </strong>
+          </div>
+        {/if}
 
         {#if activeScholarship.availableGrades?.length}
           <div class="detail-tile">

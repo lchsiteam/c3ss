@@ -10,6 +10,10 @@
     type SummerFilterKey,
     type SummerFilter
   } from "$lib/scripts/summerPrograms"
+  import {
+    compareApplicationSchedule,
+    sortByApplicationSchedule,
+  } from "$lib/scripts/applicationDates"
   import Search from "$lib/components/Search.svelte"
   import FilterSelectSummerPrograms from "$lib/components/FilterSelectSummerPrograms.svelte"
 
@@ -50,9 +54,16 @@
     term: string,
     source: Summer[],
   ): Summer[] => {
+    const reference = new Date()
+    const getSchedule = (program: Summer) => ({
+      deadline: program.deadline ?? program.start_date,
+      openDate: program.openDate,
+      openUnknown: program.openUnknown,
+    })
+    const scheduled = sortByApplicationSchedule(source, reference, getSchedule)
     const query = term.trim()
 
-    if (!query) return [...source]
+    if (!query) return scheduled
 
     return [...source]
       .map((summerProgram) => ({
@@ -60,7 +71,14 @@
         similarity: fuzzy(query, summerProgram.name),
       }))
       .sort(
-        (firstItem, secondItem) => secondItem.similarity - firstItem.similarity,
+        (firstItem, secondItem) =>
+          compareApplicationSchedule(
+            firstItem.summerProgram,
+            secondItem.summerProgram,
+            reference,
+            getSchedule,
+          ) ||
+          secondItem.similarity - firstItem.similarity,
       )
       .map(({ summerProgram }) => summerProgram)
   }
@@ -153,6 +171,8 @@
           onclick={(event) => openSummerProgram(summerProgram, event)}
           name={summerProgram.name}
           deadline={summerProgram.formattedDeadline()}
+          openDate={summerProgram.openDateIsFuture() ? summerProgram.formattedOpenDate() : null}
+          openUnknown={summerProgram.openUnknown}
           start_date={summerProgram.rollingFormattedDeadline()}
           daysLeft={summerProgram.daysUntil()}
           description={summerProgram.description}
@@ -178,28 +198,59 @@
         </div>
       </header>
       <section class="detail-grid" aria-label="Summer program details">
-        {#if activeSummerProgram.start_date != null}
-          <div class="detail-tile">
-            <span>Start Date</span>
-            <strong>{activeSummerProgram.rollingFormattedDeadline()}</strong>
-          </div>
-          <div class="detail-tile">
-            <span>Status</span>
-            <strong class={`countdown ${activeSummerProgram.rollingCountdownClass()}`}>
-              {activeSummerProgram.rollingCountdownLabel()}
-            </strong>
-          </div>
-        {:else}
+        {#if activeSummerProgram.openUnknown}
           <div class="detail-tile">
             <span>Deadline</span>
-            <strong>{activeSummerProgram.formattedDeadline()}</strong>
+            <strong>Not Released</strong>
           </div>
-          <div class="detail-tile">
-            <span>Status</span>
-            <strong class={`countdown ${activeSummerProgram.countdownClass()}`}>
-              {activeSummerProgram.countdownLabel()}
-            </strong>
-          </div>
+        {:else}
+          {#if activeSummerProgram.deadlineDate}
+            <div class="detail-tile">
+              <span>Deadline</span>
+              <strong>{activeSummerProgram.formattedDeadline()}</strong>
+            </div>
+            {#if activeSummerProgram.rollingDeadlineDate}
+              <div class="detail-tile">
+                <span>Start Date</span>
+                <strong>{activeSummerProgram.rollingFormattedDeadline()}</strong>
+              </div>
+            {/if}
+            <div class="detail-tile">
+              <span>Status</span>
+              <strong class={`countdown ${activeSummerProgram.countdownClass()}`}>
+                {activeSummerProgram.countdownLabel()}
+              </strong>
+            </div>
+          {:else if activeSummerProgram.start_date != null}
+            <div class="detail-tile">
+              <span>Start Date</span>
+              <strong>{activeSummerProgram.rollingFormattedDeadline()}</strong>
+            </div>
+            <div class="detail-tile">
+              <span>Status</span>
+              <strong class={`countdown ${activeSummerProgram.rollingCountdownClass()}`}>
+                {activeSummerProgram.rollingCountdownLabel()}
+              </strong>
+            </div>
+          {:else}
+            <div class="detail-tile">
+              <span>Deadline</span>
+              <strong>{activeSummerProgram.formattedDeadline()}</strong>
+            </div>
+            <div class="detail-tile">
+              <span>Status</span>
+              <strong class={`countdown ${activeSummerProgram.countdownClass()}`}>
+                {activeSummerProgram.countdownLabel()}
+              </strong>
+            </div>
+          {/if}
+
+          {#if activeSummerProgram.openDateIsFuture() && activeSummerProgram.formattedOpenDate()}
+            <div class="detail-tile">
+              <span>Opens</span>
+              <strong>{activeSummerProgram.formattedOpenDate()}</strong>
+            </div>
+          {/if}
         {/if}
 
 

@@ -5,6 +5,8 @@
   interface Props {
     name: string
     deadline: string
+    openDate?: string | null
+    openUnknown?: boolean
     start_date: string | null
     daysLeft: number | null
     description: string
@@ -95,7 +97,29 @@
       {/if}
     </div>
 <!-- this part works! -->
-    {#if props.start_date != "Not listed"}
+    {#if props.openUnknown}
+      <div class="deadline">
+        <div class="deadline-text">
+          <strong>Not Released</strong>
+        </div>
+      </div>
+    {:else if props.deadline != "Not listed"}
+      <div class="deadline">
+        <span class={`countdown ${countdownClass()}`}>
+          {countdownLabel()}
+        </span>
+        <div class="deadline-text">
+          <span>Deadline</span>
+          <strong>{props.deadline}</strong>
+          {#if props.openDate}
+            <span class="open-date">Opens {props.openDate}</span>
+          {/if}
+          {#if props.start_date && props.start_date !== "Not listed"}
+            <span class="open-date">Start date {props.start_date}</span>
+          {/if}
+        </div>
+      </div>
+    {:else if props.start_date != "Not listed"}
       <div class="deadline">
         <span class={`countdown ${rollingCountdownClass()}`}>
           {rollingCountdownLabel()}
@@ -103,6 +127,9 @@
         <div class="deadline-text">
           <span>Start Date</span>
           <strong>{props.start_date}</strong>
+          {#if props.openDate}
+            <span class="open-date">Opens {props.openDate}</span>
+          {/if}
         </div>
 
       </div>
@@ -114,6 +141,9 @@
         <div class="deadline-text">
           <span>Deadline</span>
           <strong>{props.deadline}</strong>
+          {#if props.openDate}
+            <span class="open-date">Opens {props.openDate}</span>
+          {/if}
         </div>
       </div>
     {/if}
@@ -248,6 +278,14 @@
       font-weight: 800;
       color: $primary;
     }
+  }
+
+  .deadline-text .open-date {
+    margin-top: 0.25rem;
+    color: $text;
+    font-size: 0.72rem;
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .countdown {

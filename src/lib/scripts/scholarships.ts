@@ -1,3 +1,10 @@
+import {
+  applicationDateIsFuture,
+  daysUntilApplicationDate,
+  formatApplicationDate,
+  parseApplicationDate,
+} from "./applicationDates"
+
 const formatCurrency = (value: number) =>
   value.toLocaleString("en-US", {
     style: "currency",
@@ -96,7 +103,9 @@ export type ScholarshipDTO = {
   id: number
   name: string
   description: string
-  deadline: string
+  deadline: string | null
+  openDate?: string | null
+  openUnknown?: boolean | null
   primary_link: string
   filters?: ScholarshipFilterKey[] | null
   availableGrades: number[]
@@ -107,7 +116,9 @@ export class Scholarship implements ScholarshipDTO {
   id: number
   name: string
   description: string
-  deadline: string
+  deadline: string | null
+  openDate?: string | null
+  openUnknown: boolean
   primary_link: string
   filters: ScholarshipFilterKey[]
   availableGrades: number[]
@@ -118,6 +129,8 @@ export class Scholarship implements ScholarshipDTO {
     this.name = dto.name
     this.description = dto.description
     this.deadline = dto.deadline
+    this.openDate = dto.openDate ?? null
+    this.openUnknown = dto.openUnknown === true
     this.primary_link = dto.primary_link
     this.filters = dto.filters ?? []
     this.availableGrades = dto.availableGrades
@@ -129,27 +142,33 @@ export class Scholarship implements ScholarshipDTO {
   }
 
   get deadlineDate() {
-    return new Date(this.deadline)
+    return parseApplicationDate(this.deadline)
+  }
+
+  get openDateDate() {
+    return parseApplicationDate(this.openDate)
+  }
+
+  openDateIsFuture(reference: Date = new Date()) {
+    return applicationDateIsFuture(this.openDate, reference)
+  }
+
+  formattedOpenDate() {
+    return formatApplicationDate(this.openDate)
   }
 
   formattedDeadline() {
     const date = this.deadlineDate
-    return this.deadline ? `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}` : "Rolling Deadline"
+    return date ? `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}` : "Rolling Deadline"
   }
 
-  daysUntil(reference: Date = new Date()) {
-    const msPerDay = 1000 * 60 * 60 * 24
-    const today = new Date(reference)
-    today.setHours(0, 0, 0, 0)
-
-    const target = new Date(this.deadline)
-    target.setHours(0, 0, 0, 0)
-
-    return Math.ceil((target.getTime() - today.getTime()) / msPerDay)
+  daysUntil(reference: Date = new Date()): number | null {
+    return daysUntilApplicationDate(this.deadline, reference)
   }
 
   countdownClass(reference?: Date) {
     const days = this.daysUntil(reference)
+    if (days === null) return "calm" as const
     if (days < 0) return "passed" as const
     if (days <= 3) return "hot" as const
     if (days <= 10) return "warm" as const
@@ -158,6 +177,7 @@ export class Scholarship implements ScholarshipDTO {
 
   countdownLabel(reference?: Date, { short = false } = {}) {
     const days = this.daysUntil(reference)
+    if (days === null) return "No deadline"
     if (days < 0) return "Passed"
     if (short) return `${days}d`
     return `${days} days`
@@ -205,6 +225,8 @@ export class Scholarship implements ScholarshipDTO {
       name: this.name,
       description: this.description,
       deadline: this.deadline,
+      openDate: this.openDate,
+      openUnknown: this.openUnknown,
       primary_link: this.primary_link,
       filters: this.filters,
       availableGrades: this.availableGrades,
