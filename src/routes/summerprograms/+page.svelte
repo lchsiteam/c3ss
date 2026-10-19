@@ -2,7 +2,7 @@
   import Modal from "$lib/components/Modal.svelte"
   import SummerProgramCard from "$lib/components/SummerPrograms.svelte"
   import Tag from "$lib/components/Tag.svelte"
-  import { fuzzy } from "fast-fuzzy"
+  import { search } from "fast-fuzzy"
   import { slide } from "svelte/transition"
   import { 
     Summer, 
@@ -11,7 +11,6 @@
     type SummerFilter
   } from "$lib/scripts/summerPrograms"
   import {
-    compareApplicationSchedule,
     sortByApplicationSchedule,
   } from "$lib/scripts/applicationDates"
   import Search from "$lib/components/Search.svelte"
@@ -60,27 +59,14 @@
       openDate: program.openDate,
       openUnknown: program.openUnknown,
     })
-    const scheduled = sortByApplicationSchedule(source, reference, getSchedule)
     const query = term.trim()
+    const matchingPrograms = query
+      ? search(query, source, {
+          keySelector: (program) => program.name,
+        })
+      : source
 
-    if (!query) return scheduled
-
-    return [...source]
-      .map((summerProgram) => ({
-        summerProgram,
-        similarity: fuzzy(query, summerProgram.name),
-      }))
-      .sort(
-        (firstItem, secondItem) =>
-          compareApplicationSchedule(
-            firstItem.summerProgram,
-            secondItem.summerProgram,
-            reference,
-            getSchedule,
-          ) ||
-          secondItem.similarity - firstItem.similarity,
-      )
-      .map(({ summerProgram }) => summerProgram)
+    return sortByApplicationSchedule(matchingPrograms, reference, getSchedule)
   }
 
   const toggleFilter = (filter: SummerFilterKey) => {

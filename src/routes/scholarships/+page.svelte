@@ -2,7 +2,7 @@
   import Modal from "$lib/components/Modal.svelte"
   import ScholarshipCard from "$lib/components/Scholarship.svelte"
   import Tag from "$lib/components/Tag.svelte"
-  import { fuzzy } from "fast-fuzzy"
+  import { search } from "fast-fuzzy"
   import { tick } from "svelte"
   import { slide, fly, fade } from "svelte/transition"
   import {
@@ -12,7 +12,6 @@
     type ScholarshipFilterKey,
   } from "$lib/scripts/scholarships"
   import {
-    compareApplicationSchedule,
     sortByApplicationSchedule,
   } from "$lib/scripts/applicationDates"
   import Search from "$lib/components/Search.svelte"
@@ -162,26 +161,14 @@
     source: Scholarship[],
   ): Scholarship[] => {
     const reference = new Date()
-    const scheduled = sortByApplicationSchedule(source, reference)
     const query = term.trim()
+    const matchingScholarships = query
+      ? search(query, source, {
+          keySelector: (scholarship) => scholarship.name,
+        })
+      : source
 
-    if (!query) return scheduled
-
-    return [...source]
-      .map((scholarship) => ({
-        scholarship,
-        similarity: fuzzy(query, scholarship.name),
-      }))
-      .sort(
-        (firstItem, secondItem) =>
-          compareApplicationSchedule(
-            firstItem.scholarship,
-            secondItem.scholarship,
-            reference,
-          ) ||
-          secondItem.similarity - firstItem.similarity,
-      )
-      .map(({ scholarship }) => scholarship)
+    return sortByApplicationSchedule(matchingScholarships, reference)
   }
 
   const toggleFilter = (filter: ScholarshipFilterKey) => {
