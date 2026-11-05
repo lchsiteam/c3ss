@@ -2,6 +2,7 @@
   import { enhance } from "$app/forms"
   import type { PageData } from "./$types"
   import type { ScholarshipDTO } from "$lib/scripts/scholarships"
+  import { FILTER_COLORS, filterDefinitions } from "$lib/scripts/scholarships"
   import type { SummerDTO } from "$lib/scripts/summerPrograms"
 
   type CatalogType = "scholarships" | "summerprograms"
@@ -13,7 +14,12 @@
     hint?: string
     wide?: boolean
   }
-  type FilterOption = { key: string; label: string; description: string }
+  type FilterOption = {
+    key: string
+    label: string
+    description: string
+    color?: string
+  }
   type AwardDraft = {
     place: number
     mode: "single" | "range" | "full-tuition"
@@ -105,54 +111,14 @@
     { key: "location", label: "Location", kind: "text" },
   ]
 
-  const scholarshipFilterOptions: FilterOption[] = [
-    { key: "science", label: "Science", description: "Related to science." },
-    {
-      key: "ethnic",
-      label: "Ethnic community",
-      description: "For a specific ethnic community.",
-    },
-    {
-      key: "needbased",
-      label: "Need-based",
-      description: "Considers financial need.",
-    },
-    {
-      key: "experienceincluded",
-      label: "Experience included",
-      description: "Includes an experience in addition to funding.",
-    },
-    {
-      key: "literaryarts",
-      label: "Literary arts",
-      description: "Related to writing or the arts.",
-    },
-    {
-      key: "advocacy",
-      label: "Advocacy",
-      description: "Related to social or political activism.",
-    },
-    {
-      key: "meritonly",
-      label: "Merit only",
-      description: "Awarded based on merit.",
-    },
-    {
-      key: "majorspecific",
-      label: "Major-specific",
-      description: "Requires a specific college major.",
-    },
-    {
-      key: "local",
-      label: "Local",
-      description: "Available in the La Cañada or SGV area.",
-    },
-    {
-      key: "womenonly",
-      label: "Women only",
-      description: "Only open to female students.",
-    },
-  ]
+  const scholarshipFilterOptions: FilterOption[] = Object.entries(
+    filterDefinitions,
+  ).map(([key, definition]) => ({
+    key,
+    label: definition.name,
+    description: definition.description,
+    color: FILTER_COLORS[definition.color],
+  }))
 
   const summerFilterOptions: FilterOption[] = [
     { key: "science", label: "Science", description: "Related to science." },
@@ -724,18 +690,20 @@
               </div>
               <div class="option-grid">
                 {#each filterOptions as option (option.key)}
-                  <label class="choice-card">
+                  <label
+                    class="choice-card"
+                    style={`--filter-color: ${option.color ?? "#7d1915"}`}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedFilters.includes(option.key)}
                       onchange={(event) =>
                         toggleFilter(option.key, event.currentTarget.checked)}
                     />
-                    <span
-                      ><strong>{option.label}</strong><small
-                        >{option.description}</small
-                      ></span
-                    >
+                    <span>
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
                   </label>
                 {/each}
               </div>
@@ -929,7 +897,7 @@
     color: $text;
     width: 100%;
     min-width: 0;
-    margin: 0;
+    margin-bottom: 5%;
     animation: admin-enter 300ms ease-out backwards;
   }
 
@@ -1411,15 +1379,22 @@
     min-width: 0;
     overflow-wrap: anywhere;
     padding: 10px;
-    border: 1px solid rgba(125, 25, 21, 0.12);
+    border: 1px solid color-mix(in srgb, var(--filter-color) 38%, transparent);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.76);
+    box-shadow: inset 3px 0 var(--filter-color);
     cursor: pointer;
   }
 
+  .choice-card:hover {
+    border-color: var(--filter-color);
+    background: color-mix(in srgb, var(--filter-color) 6%, white);
+  }
+
   .choice-card:has(input:checked) {
-    border-color: rgba(125, 25, 21, 0.38);
-    background: rgba(125, 25, 21, 0.055);
+    border-color: var(--filter-color);
+    background: color-mix(in srgb, var(--filter-color) 10%, white);
+    box-shadow: inset 4px 0 var(--filter-color);
   }
 
   .choice-card input,
@@ -1428,6 +1403,13 @@
     width: 17px;
     height: 17px;
     margin: 1px 0 0;
+  }
+
+  .choice-card input {
+    accent-color: var(--filter-color);
+  }
+
+  .grade-choice input {
     accent-color: $primary;
   }
 
@@ -1439,6 +1421,7 @@
   }
 
   .choice-card strong {
+    color: $text;
     font-size: 0.78rem;
   }
 

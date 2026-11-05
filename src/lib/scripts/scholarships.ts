@@ -40,7 +40,7 @@ export type FilterDefinition = {
   color: FilterColor
 }
 
-const filterDefinitions = {
+export const filterDefinitions = {
   science: {
     name: "Science",
     description: "The scholarship has some relevancy to science.",
