@@ -1,24 +1,29 @@
-import { createHmac, createHash, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { dev } from '$app/environment'
 import { env } from '$env/dynamic/private'
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY } from '$env/static/public'
+import { PUBLIC_SUPABASE_PUBLISHABLE_KEY, PUBLIC_SUPABASE_URL } from '$env/static/public'
 import { createClient } from '@supabase/supabase-js'
 import { fail } from '@sveltejs/kit'
-import { dev } from '$app/environment'
 import type { Actions, PageServerLoad } from './$types'
 import type { ScholarshipDTO } from '$lib/scripts/scholarships'
 import type { SummerDTO } from '$lib/scripts/summerPrograms'
 
 const SESSION_COOKIE = 'c3ss_admin_session'
-const SESSION_DURATION_SECONDS = 60 * 60 * 8
+const SESSION_DURATION_SECONDS = 8 * 60 * 60
 
 type CatalogType = 'scholarships' | 'summerprograms'
+type WriteMode = 'create' | 'save'
+type ActionEvent = Parameters<Actions['create']>[0]
 
 const isCatalogType = (value: FormDataEntryValue | null): value is CatalogType =>
   value === 'scholarships' || value === 'summerprograms'
 
+const tableFor = (type: CatalogType) =>
+  type === 'scholarships' ? 'scholarships' : 'summerprograms'
+
 const sessionKey = () => env.ADMIN_SESSION_SECRET || env.ADMIN_PASSWORD || ''
 
-const signatureFor = (expiresAt: string) =>
+const signSession = (expiresAt: string) =>
   createHmac('sha256', sessionKey()).update(`c3ss-admin:${expiresAt}`).digest('base64url')
 
 const isAuthenticated = (cookie: string | undefined) => {
@@ -28,14 +33,14 @@ const isAuthenticated = (cookie: string | undefined) => {
   if (!expiresAt || !signature || extra || !/^\d+$/.test(expiresAt)) return false
   if (Number(expiresAt) <= Date.now()) return false
 
-  const expected = Buffer.from(signatureFor(expiresAt))
+  const expected = Buffer.from(signSession(expiresAt))
   const received = Buffer.from(signature)
   return expected.length === received.length && timingSafeEqual(expected, received)
 }
 
-const setAdminCookie = (cookies: Parameters<Actions['login']>[0]['cookies']) => {
+const setAdminCookie = (cookies: ActionEvent['cookies']) => {
   const expiresAt = String(Date.now() + SESSION_DURATION_SECONDS * 1000)
-  cookies.set(SESSION_COOKIE, `${expiresAt}.${signatureFor(expiresAt)}`, {
+  cookies.set(SESSION_COOKIE, `${expiresAt}.${signSession(expiresAt)}`, {
     httpOnly: true,
     secure: !dev,
     sameSite: 'strict',
@@ -44,7 +49,7 @@ const setAdminCookie = (cookies: Parameters<Actions['login']>[0]['cookies']) => 
   })
 }
 
-const comparePassword = (candidate: string, expected: string) => {
+const passwordMatches = (candidate: string, expected: string) => {
   const candidateHash = createHash('sha256').update(candidate).digest()
   const expectedHash = createHash('sha256').update(expected).digest()
   return timingSafeEqual(candidateHash, expectedHash)
@@ -52,103 +57,200 @@ const comparePassword = (candidate: string, expected: string) => {
 
 const privilegedKey = () => env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY
 
-const createReadClient = () =>
+const createSupabaseClient = () =>
   createClient(
     PUBLIC_SUPABASE_URL,
     privilegedKey() || PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-const parseJsonField = (value: FormDataEntryValue | null, name: string) => {
-  if (typeof value !== 'string') throw new Error(`Missing ${name}.`)
+const writeAccessFailure = (cookies: ActionEvent['cookies']) => {
+  if (!isAuthenticated(cookies.get(SESSION_COOKIE))) {
+    return fail(401, { error: 'Your admin session expired. Sign in again.' })
+  }
+
+  if (!privilegedKey()) {
+    return fail(503, {
+      error: 'Database editing is not configured. Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY to the server environment.'
+    })
+  }
+
+  return null
+}
+
+const parseJsonField = (form: FormData, field: string, label = field) => {
+  const value = form.get(field)
+  if (typeof value !== 'string') throw new Error(`Missing ${label}.`)
+
   try {
     return JSON.parse(value) as unknown
   } catch {
-    throw new Error(`${name} must contain valid JSON.`)
+    throw new Error(`${label} must contain valid JSON.`)
   }
 }
 
-const nullableText = (value: FormDataEntryValue | null, name: string) => {
-  if (typeof value !== 'string') throw new Error(`Missing ${name}.`)
-  return value.trim() === '' ? null : value.trim()
-}
-
-const requiredText = (value: FormDataEntryValue | null, name: string) => {
-  if (typeof value !== 'string' || value.trim() === '') throw new Error(`${name} is required.`)
+const textField = (form: FormData, field: string, label = field) => {
+  const value = form.get(field)
+  if (typeof value !== 'string') throw new Error(`Missing ${label}.`)
   return value.trim()
 }
 
-const nullableDate = (value: FormDataEntryValue | null, name: string) => {
-  const date = nullableText(value, name)
-  if (date === null) return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`${name} must be a valid date.`)
-  const parsed = new Date(`${date}T00:00:00.000Z`)
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
-    throw new Error(`${name} must be a valid date.`)
-  }
-  return date
+const nullableText = (form: FormData, field: string, label = field) =>
+  textField(form, field, label) || null
+
+const requiredText = (form: FormData, field: string, label = field) => {
+  const value = textField(form, field, label)
+  if (!value) throw new Error(`${label} is required.`)
+  return value
 }
 
-const isAwardList = (value: unknown) =>
-  Array.isArray(value) && value.every((award) => {
-    if (!award || typeof award !== 'object' || Array.isArray(award)) return false
-    const candidate = award as { place?: unknown; amount?: unknown }
-    if (!Number.isInteger(candidate.place) || Number(candidate.place) < 1) return false
-    if (typeof candidate.amount === 'number') return Number.isFinite(candidate.amount) && candidate.amount >= 0
-    return Array.isArray(candidate.amount) && candidate.amount.length === 2 &&
-      typeof candidate.amount[0] === 'number' && Number.isFinite(candidate.amount[0]) && candidate.amount[0] >= 0 &&
-      (typeof candidate.amount[1] === 'number'
-        ? Number.isFinite(candidate.amount[1]) && candidate.amount[1] >= candidate.amount[0]
-        : candidate.amount[1] === 'full-tuition')
-  })
+const nullableDate = (form: FormData, field: string, label = field) => {
+  const value = nullableText(form, field, label)
+  if (!value) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} must be a valid date.`)
 
-const buildUpdate = (form: FormData, type: CatalogType) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} must be a valid date.`)
+  }
+
+  return value
+}
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string')
+
+const isIntegerArray = (value: unknown): value is number[] =>
+  Array.isArray(value) && value.every((item): item is number => Number.isInteger(item))
+
+const readGrades = (grades: unknown, allowNull: boolean) => {
+  if (allowNull && grades === null) return null
+  if (!isIntegerArray(grades)) {
+    const suffix = allowNull ? ', or null' : ''
+    throw new Error(`Available grades must be a JSON array of whole numbers${suffix}.`)
+  }
+  return grades
+}
+
+const isAmountRange = (value: unknown): value is [number, number | 'full-tuition'] => {
+  if (!Array.isArray(value) || value.length !== 2) return false
+
+  const [minimum, maximum] = value
+  if (typeof minimum !== 'number' || !Number.isFinite(minimum) || minimum < 0) return false
+  if (typeof maximum === 'number') return Number.isFinite(maximum) && maximum >= minimum
+  return maximum === 'full-tuition'
+}
+
+const isAward = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+
+  const award = value as { place?: unknown; amount?: unknown }
+  const validPlace = typeof award.place === 'number' && Number.isInteger(award.place) && award.place >= 1
+  const validAmount =
+    (typeof award.amount === 'number' && Number.isFinite(award.amount) && award.amount >= 0) ||
+    isAmountRange(award.amount)
+
+  return validPlace && validAmount
+}
+
+const isAwardList = (value: unknown) => Array.isArray(value) && value.every(isAward)
+
+const buildListing = (form: FormData, type: CatalogType) => {
+  const filterValues = parseJsonField(form, 'filters', 'Filters')
+  const gradeValues = parseJsonField(form, 'availableGrades', 'Available grades')
+  const endowment = type === 'scholarships'
+    ? parseJsonField(form, 'endowment', 'Awards')
+    : null
+
+  if (!isStringArray(filterValues)) throw new Error('Choose valid filters.')
+  const availableGrades = readGrades(gradeValues, type === 'summerprograms')
+
   if (type === 'scholarships') {
-    const filters = parseJsonField(form.get('filters'), 'Filters')
-    const availableGrades = parseJsonField(form.get('availableGrades'), 'Available grades')
-    const endowment = parseJsonField(form.get('endowment'), 'Awards')
-    if (!Array.isArray(filters) || !filters.every((filter) => typeof filter === 'string')) {
-      throw new Error('Choose valid filters.')
-    }
-    if (!Array.isArray(availableGrades) || !availableGrades.every(Number.isInteger)) {
-      throw new Error('Available grades must be a JSON array of whole numbers.')
-    }
     if (!isAwardList(endowment)) throw new Error('Check the award places and amounts.')
 
     return {
-      name: requiredText(form.get('name'), 'Name'),
-      description: requiredText(form.get('description'), 'Description'),
-      deadline: nullableDate(form.get('deadline'), 'Deadline'),
-      openDate: nullableDate(form.get('openDate'), 'Application opens'),
+      name: requiredText(form, 'name', 'Name'),
+      description: requiredText(form, 'description', 'Description'),
+      deadline: nullableDate(form, 'deadline', 'Deadline'),
+      openDate: nullableDate(form, 'openDate', 'Application opens'),
       openUnknown: form.get('openUnknown') === 'on',
-      primary_link: requiredText(form.get('primary_link'), 'Primary link'),
-      filters,
+      primary_link: requiredText(form, 'primary_link', 'Primary link'),
+      filters: filterValues,
       availableGrades,
       endowment
     }
   }
 
-  const filters = parseJsonField(form.get('filters'), 'Filters')
-  const availableGrades = parseJsonField(form.get('availableGrades'), 'Available grades')
-  if (!Array.isArray(filters) || !filters.every((filter) => typeof filter === 'string')) {
-    throw new Error('Choose valid filters.')
+  return {
+    created: nullableDate(form, 'created', 'Created date'),
+    name: requiredText(form, 'name', 'Name'),
+    description: nullableText(form, 'description', 'Description'),
+    deadline: nullableDate(form, 'deadline', 'Deadline'),
+    openDate: nullableDate(form, 'openDate', 'Application opens'),
+    openUnknown: form.get('openUnknown') === 'on',
+    start_date: nullableDate(form, 'start_date', 'Program start date'),
+    primary_link: nullableText(form, 'primary_link', 'Primary link'),
+    filters: filterValues,
+    availableGrades,
+    location: nullableText(form, 'location', 'Location')
   }
-  if (availableGrades !== null && (!Array.isArray(availableGrades) || !availableGrades.every(Number.isInteger))) {
-    throw new Error('Available grades must be a JSON array of whole numbers, or null.')
+}
+
+const catalogFromForm = (form: FormData) => {
+  const value = form.get('catalogType')
+  return isCatalogType(value) ? value : null
+}
+
+const idFromForm = (form: FormData) => {
+  const value = form.get('id')
+  const id = typeof value === 'string' ? Number(value) : NaN
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
+const saveListing = async (event: ActionEvent, mode: WriteMode) => {
+  const accessFailure = writeAccessFailure(event.cookies)
+  if (accessFailure) return accessFailure
+
+  const form = await event.request.formData()
+  const type = catalogFromForm(form)
+  if (!type) return fail(400, { error: 'Choose a valid catalog.' })
+
+  const id = mode === 'save' ? idFromForm(form) : null
+  if (mode === 'save' && id === null) return fail(400, { error: 'Choose a valid record.' })
+
+  let values: Record<string, unknown>
+  try {
+    values = buildListing(form, type)
+  } catch (error) {
+    return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields.' })
+  }
+
+  const supabase = createSupabaseClient()
+  const table = tableFor(type)
+  const result = mode === 'create'
+    ? await supabase.from(table).insert(values).select('*').single()
+    : await supabase.from(table).update(values).eq('id', id as number).select('*').maybeSingle()
+
+  if (result.error) {
+    const logMessage = mode === 'create'
+      ? `Admin insert failed for ${table}:`
+      : `Admin update failed for ${table} record ${id}:`
+    console.error(logMessage, result.error.message)
+    const message = mode === 'create'
+      ? 'The database could not create this listing. Check the fields and try again.'
+      : 'The database rejected this change. Check the values and try again.'
+    return fail(500, { error: message })
+  }
+
+  if (mode === 'save' && !result.data) {
+    return fail(404, { error: 'That record could not be found. Refresh and select it again.' })
   }
 
   return {
-    created: nullableDate(form.get('created'), 'Created date'),
-    name: requiredText(form.get('name'), 'Name'),
-    description: nullableText(form.get('description'), 'Description'),
-    deadline: nullableDate(form.get('deadline'), 'Deadline'),
-    openDate: nullableDate(form.get('openDate'), 'Application opens'),
-    openUnknown: form.get('openUnknown') === 'on',
-    start_date: nullableDate(form.get('start_date'), 'Program start date'),
-    primary_link: nullableText(form.get('primary_link'), 'Primary link'),
-    filters,
-    availableGrades,
-    location: nullableText(form.get('location'), 'Location')
+    success: true,
+    message: mode === 'create' ? 'Listing created.' : 'Changes saved to the database.',
+    record: result.data as ScholarshipDTO | SummerDTO,
+    catalogType: type
   }
 }
 
@@ -159,21 +261,21 @@ export const load: PageServerLoad = async ({ cookies, setHeaders }) => {
   const loginConfigured = Boolean(env.ADMIN_PASSWORD)
   if (!authenticated) return { authenticated: false, loginConfigured }
 
-  const supabase = createReadClient()
-  const [scholarshipsResult, summerProgramsResult] = await Promise.all([
+  const supabase = createSupabaseClient()
+  const [scholarships, summerPrograms] = await Promise.all([
     supabase.from('scholarships').select('*').order('name'),
     supabase.from('summerprograms').select('*').order('name')
   ])
 
-  const errors = [scholarshipsResult.error, summerProgramsResult.error].filter(Boolean)
+  const errors = [scholarships.error, summerPrograms.error].filter(Boolean)
   if (errors.length) console.error('Admin catalog load failed:', errors.map((error) => error?.message))
 
   return {
     authenticated: true,
     loginConfigured,
     canSave: Boolean(privilegedKey()),
-    scholarships: (scholarshipsResult.data ?? []) as ScholarshipDTO[],
-    summerPrograms: (summerProgramsResult.data ?? []) as SummerDTO[],
+    scholarships: (scholarships.data ?? []) as ScholarshipDTO[],
+    summerPrograms: (summerPrograms.data ?? []) as SummerDTO[],
     loadError: errors.length ? 'Could not load one or more catalog lists from the database.' : null
   }
 }
@@ -185,7 +287,7 @@ export const actions: Actions = {
     const expected = env.ADMIN_PASSWORD
 
     if (!expected) return fail(503, { error: 'Admin access is not configured on the server.' })
-    if (typeof candidate !== 'string' || !comparePassword(candidate, expected)) {
+    if (typeof candidate !== 'string' || !passwordMatches(candidate, expected)) {
       return fail(401, { error: 'That password did not match.' })
     }
 
@@ -198,118 +300,34 @@ export const actions: Actions = {
     return { success: true }
   },
 
-  create: async ({ request, cookies }) => {
-    if (!isAuthenticated(cookies.get(SESSION_COOKIE))) {
-      return fail(401, { error: 'Your admin session expired. Sign in again.' })
-    }
-    if (!privilegedKey()) {
-      return fail(503, {
-        error: 'Database editing is not configured. Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY to the server environment.'
-      })
-    }
-
-    const form = await request.formData()
-    const typeValue = form.get('catalogType')
-    if (!isCatalogType(typeValue)) return fail(400, { error: 'Choose a valid catalog.' })
-
-    let values: Record<string, unknown>
-    try {
-      values = buildUpdate(form, typeValue)
-    } catch (error) {
-      return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields.' })
-    }
-
-    const supabase = createReadClient()
-    const table = typeValue === 'scholarships' ? 'scholarships' : 'summerprograms'
-    const { data, error } = await supabase.from(table).insert(values).select('*').single()
-
-    if (error) {
-      console.error(`Admin insert failed for ${table}:`, error.message)
-      return fail(500, { error: 'The database could not create this listing. Check the fields and try again.' })
-    }
-
-    return {
-      success: true,
-      message: 'Listing created.',
-      record: data as ScholarshipDTO | SummerDTO,
-      catalogType: typeValue
-    }
-  },
+  create: (event) => saveListing(event, 'create'),
 
   delete: async ({ request, cookies }) => {
-    if (!isAuthenticated(cookies.get(SESSION_COOKIE))) {
-      return fail(401, { error: 'Your admin session expired. Sign in again.' })
-    }
-    if (!privilegedKey()) {
-      return fail(503, {
-        error: 'Database editing is not configured. Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY to the server environment.'
-      })
-    }
+    const accessFailure = writeAccessFailure(cookies)
+    if (accessFailure) return accessFailure
 
     const form = await request.formData()
-    const typeValue = form.get('catalogType')
-    const idValue = form.get('id')
-    const id = typeof idValue === 'string' ? Number(idValue) : NaN
-    if (!isCatalogType(typeValue)) return fail(400, { error: 'Choose a valid catalog.' })
-    if (!Number.isSafeInteger(id) || id < 1) return fail(400, { error: 'Choose a valid record.' })
+    const type = catalogFromForm(form)
+    if (!type) return fail(400, { error: 'Choose a valid catalog.' })
 
-    const table = typeValue === 'scholarships' ? 'scholarships' : 'summerprograms'
-    const { data, error } = await createReadClient()
-      .from(table)
+    const id = idFromForm(form)
+    if (id === null) return fail(400, { error: 'Choose a valid record.' })
+
+    const { data, error } = await createSupabaseClient()
+      .from(tableFor(type))
       .delete()
       .eq('id', id)
       .select('id')
       .maybeSingle()
 
     if (error) {
-      console.error(`Admin delete failed for ${table} record ${id}:`, error.message)
+      console.error(`Admin delete failed for ${tableFor(type)} record ${id}:`, error.message)
       return fail(500, { error: 'The database could not remove this listing.' })
     }
     if (!data) return fail(404, { error: 'That record could not be found. Refresh and try again.' })
 
-    return { success: true, deletedId: id, catalogType: typeValue }
+    return { success: true, deletedId: id, catalogType: type }
   },
 
-  save: async ({ request, cookies }) => {
-    if (!isAuthenticated(cookies.get(SESSION_COOKIE))) {
-      return fail(401, { error: 'Your admin session expired. Sign in again.' })
-    }
-    if (!privilegedKey()) {
-      return fail(503, {
-        error: 'Database editing is not configured. Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY to the server environment.'
-      })
-    }
-
-    const form = await request.formData()
-    const typeValue = form.get('catalogType')
-    if (!isCatalogType(typeValue)) return fail(400, { error: 'Choose a valid catalog.' })
-
-    const idValue = form.get('id')
-    const id = typeof idValue === 'string' ? Number(idValue) : NaN
-    if (!Number.isSafeInteger(id) || id < 1) return fail(400, { error: 'Choose a valid record.' })
-
-    let values: Record<string, unknown>
-    try {
-      values = buildUpdate(form, typeValue)
-    } catch (error) {
-      return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields.' })
-    }
-
-    const supabase = createReadClient()
-    const table = typeValue === 'scholarships' ? 'scholarships' : 'summerprograms'
-    const { data, error } = await supabase.from(table).update(values).eq('id', id).select('*').maybeSingle()
-
-    if (error) {
-      console.error(`Admin update failed for ${table} record ${id}:`, error.message)
-      return fail(500, { error: 'The database rejected this change. Check the values and try again.' })
-    }
-    if (!data) return fail(404, { error: 'That record could not be found. Refresh and select it again.' })
-
-    return {
-      success: true,
-      message: 'Changes saved to the database.',
-      record: data as ScholarshipDTO | SummerDTO,
-      catalogType: typeValue
-    }
-  }
+  save: (event) => saveListing(event, 'save')
 }

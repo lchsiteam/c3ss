@@ -1,8 +1,12 @@
 <script lang="ts">
   import { enhance } from "$app/forms"
+  import type { SubmitFunction } from "@sveltejs/kit"
   import type { PageData } from "./$types"
-  import type { ScholarshipDTO } from "$lib/scripts/scholarships"
-  import { FILTER_COLORS, filterDefinitions } from "$lib/scripts/scholarships"
+  import {
+    FILTER_COLORS,
+    filterDefinitions,
+    type ScholarshipDTO,
+  } from "$lib/scripts/scholarships"
   import type { SummerDTO } from "$lib/scripts/summerPrograms"
 
   type CatalogType = "scholarships" | "summerprograms"
@@ -44,24 +48,31 @@
   let deleting = $state(false)
   let deleteError = $state("")
 
-  const scholarshipFields: Field[] = [
-    { key: "name", label: "Name", kind: "text", wide: true },
-    { key: "description", label: "Description", kind: "textarea", wide: true },
+  const applicationDateFields = (
+    deadlineLabel: string,
+    deadlineHint?: string,
+    openDateHint?: string,
+  ): Field[] => [
     {
       key: "deadline",
-      label: "Deadline",
+      label: deadlineLabel,
       kind: "date",
+      ...(deadlineHint ? { hint: deadlineHint } : {}),
     },
     {
       key: "openDate",
       label: "Application opens",
       kind: "date",
+      ...(openDateHint ? { hint: openDateHint } : {}),
     },
-    {
-      key: "openUnknown",
-      label: "Application date not released",
-      kind: "checkbox",
-    },
+    { key: "rollingDeadline", label: "Rolling deadline", kind: "checkbox" },
+    { key: "openUnknown", label: "Application date not released", kind: "checkbox" },
+  ]
+
+  const scholarshipFields: Field[] = [
+    { key: "name", label: "Name", kind: "text", wide: true },
+    { key: "description", label: "Description", kind: "textarea", wide: true },
+    ...applicationDateFields("Deadline"),
     {
       key: "primary_link",
       label: "Application link",
@@ -79,23 +90,11 @@
       hint: "Optional record date.",
     },
     { key: "description", label: "Description", kind: "textarea", wide: true },
-    {
-      key: "deadline",
-      label: "Application deadline",
-      kind: "date",
-      hint: "Leave blank if there is no deadline.",
-    },
-    {
-      key: "openDate",
-      label: "Application opens",
-      kind: "date",
-      hint: "Choose the calendar date applications open.",
-    },
-    {
-      key: "openUnknown",
-      label: "Application date not released",
-      kind: "checkbox",
-    },
+    ...applicationDateFields(
+      "Application deadline",
+      "Leave blank if there is no deadline.",
+      "Choose the calendar date applications open.",
+    ),
     {
       key: "start_date",
       label: "Program start date",
@@ -188,6 +187,13 @@
     return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`
   }
 
+  const isDateInactive = (key: string) =>
+    (key === "deadline" &&
+      (draft?.rollingDeadline === true || draft?.openUnknown === true)) ||
+    (key === "openDate" && draft?.openUnknown === true)
+
+  const dateTooltipId = (key: string) => `field-${key}-not-active`
+
   const readFilterList = (value: unknown): string[] => {
     if (typeof value === "string") {
       try {
@@ -230,9 +236,20 @@
     return result
   }
 
+  const clearSaveStatus = () => {
+    saveError = ""
+    saveMessage = ""
+  }
+
   const assignDraft = (record: CatalogRecord) => {
     const recordValues = record as unknown as Record<string, unknown>
-    draft = { ...recordValues }
+    draft = {
+      ...recordValues,
+      rollingDeadline:
+        recordValues.deadline == null &&
+        recordValues.openUnknown !== true &&
+        (catalogType === "scholarships" || recordValues.start_date != null),
+    }
     selectedFilters = readFilterList(recordValues.filters)
     selectedGrades = Array.isArray(recordValues.availableGrades)
       ? recordValues.availableGrades
@@ -250,48 +267,50 @@
     selectedId = record.id
     isCreating = false
     assignDraft(record)
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
     deleteError = ""
   }
+
+  const emptyDraft = (type: CatalogType, today: string): Record<string, unknown> =>
+    type === "scholarships"
+      ? {
+          name: "",
+          description: "",
+          deadline: null,
+          openDate: null,
+          rollingDeadline: true,
+          openUnknown: false,
+          primary_link: "",
+          filters: [],
+          availableGrades: [],
+          endowment: [],
+        }
+      : {
+          name: "",
+          created: today,
+          description: "",
+          deadline: null,
+          openDate: null,
+          rollingDeadline: false,
+          openUnknown: false,
+          start_date: null,
+          primary_link: null,
+          filters: [],
+          availableGrades: [],
+          location: "",
+        }
 
   const beginCreate = () => {
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
     isCreating = true
     selectedId = null
-    draft =
-      catalogType === "scholarships"
-        ? {
-            name: "",
-            description: "",
-            deadline: null,
-            openDate: null,
-            openUnknown: false,
-            primary_link: "",
-            filters: [],
-            availableGrades: [],
-            endowment: [],
-          }
-        : {
-            name: "",
-            created: today,
-            description: "",
-            deadline: null,
-            openDate: null,
-            openUnknown: false,
-            start_date: null,
-            primary_link: null,
-            filters: [],
-            availableGrades: [],
-            location: "",
-          }
+    draft = emptyDraft(catalogType, today)
     selectedFilters = []
     selectedGrades = []
     awards = []
     extraGradeValue = ""
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
     deleteError = ""
   }
 
@@ -301,8 +320,7 @@
     isCreating = false
     draft = null
     searchTerm = ""
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
     deleteError = ""
     const first =
       nextType === "scholarships"
@@ -311,26 +329,26 @@
     if (first) makeDraft(first)
   }
 
-  const updateText = (key: string, value: string) => {
+  const updateDraft = (key: string, value: unknown) => {
     if (!draft) return
     draft[key] = value
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
   }
 
+  const updateText = (key: string, value: string) => updateDraft(key, value)
+
   const updateCheckbox = (key: string, value: boolean) => {
-    if (!draft) return
-    draft[key] = value
-    saveError = ""
-    saveMessage = ""
+    updateDraft(key, value)
+    if (!draft || !value) return
+    if (key === "openUnknown" && value) draft.rollingDeadline = false
+    if (key === "rollingDeadline" && value) draft.openUnknown = false
   }
 
   const toggleFilter = (key: string, checked: boolean) => {
     selectedFilters = checked
       ? [...new Set([...selectedFilters, key])]
       : selectedFilters.filter((filter) => filter !== key)
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
   }
 
   const toggleGrade = (grade: number, checked: boolean) => {
@@ -339,8 +357,7 @@
         ? [...new Set([...selectedGrades, grade])]
         : selectedGrades.filter((current) => current !== grade)
     ).sort((first, second) => first - second)
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
   }
 
   const addExtraGrade = () => {
@@ -353,8 +370,7 @@
   const addAward = () => {
     const place = Math.max(0, ...awards.map((award) => award.place)) + 1
     awards = [...awards, { place, mode: "single", minimum: "", maximum: "" }]
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
   }
 
   const updateAward = (index: number, key: keyof AwardDraft, value: string) => {
@@ -364,14 +380,71 @@
     else if (key === "mode") award.mode = value as AwardDraft["mode"]
     else if (key === "minimum") award.minimum = value
     else award.maximum = value
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
   }
 
   const removeAward = (index: number) => {
     awards = awards.filter((_, awardIndex) => awardIndex !== index)
-    saveError = ""
-    saveMessage = ""
+    clearSaveStatus()
+  }
+
+  const loginEnhance: SubmitFunction = () => {
+    loginError = ""
+    return async ({ result, update }) => {
+      await update()
+      if (result.type !== "failure") return
+
+      const response = result.data as { error?: unknown }
+      loginError = String(response.error ?? "Sign in failed.")
+    }
+  }
+
+  const saveEnhance: SubmitFunction = () => {
+    saving = true
+    clearSaveStatus()
+
+    return async ({ result, update }) => {
+      await update({ reset: false })
+      saving = false
+
+      if (result.type === "success") {
+        const response = result.data as {
+          record?: Record<string, unknown>
+          message?: string
+        }
+        if (response.record) {
+          selectedId = Number(response.record.id)
+          isCreating = false
+          assignDraft(response.record as CatalogRecord)
+        }
+        saveMessage = response.message ?? "Changes saved."
+      } else if (result.type === "failure") {
+        const response = result.data as { error?: unknown }
+        saveError = String(response.error ?? "Could not save these changes.")
+      }
+    }
+  }
+
+  const deleteEnhance: SubmitFunction = () => {
+    deleting = true
+    deleteError = ""
+
+    return async ({ result, update }) => {
+      await update()
+      deleting = false
+
+      if (result.type === "success") {
+        selectedId = null
+        draft = null
+        isCreating = false
+        selectedFilters = []
+        selectedGrades = []
+        awards = []
+      } else if (result.type === "failure") {
+        const response = result.data as { error?: unknown }
+        deleteError = String(response.error ?? "Could not delete this listing.")
+      }
+    }
   }
 
   const confirmDelete = (event: SubmitEvent) => {
@@ -415,16 +488,7 @@
         class="login-form"
         method="POST"
         action="?/login"
-        use:enhance={() => {
-          loginError = ""
-          return async ({ result, update }) => {
-            await update()
-            if (result.type === "failure") {
-              const response = result.data as { error?: unknown }
-              loginError = String(response.error ?? "Sign in failed.")
-            }
-          }
-        }}
+        use:enhance={loginEnhance}
       >
         <label for="admin-password">Password</label>
         <input
@@ -523,25 +587,7 @@
                   method="POST"
                   action="?/delete"
                   onsubmit={confirmDelete}
-                  use:enhance={() => {
-                    deleting = true
-                    deleteError = ""
-                    return async ({ result, update }) => {
-                      await update()
-                      deleting = false
-                      if (result.type === "success") {
-                        selectedId = null
-                        draft = null
-                        isCreating = false
-                        selectedFilters = []
-                        selectedGrades = []
-                        awards = []
-                      } else if (result.type === "failure") {
-                        const response = result.data as { error?: unknown }
-                        deleteError = String(response.error ?? "Could not delete this listing.")
-                      }
-                    }
-                  }}
+                  use:enhance={deleteEnhance}
                 >
                   <input type="hidden" name="catalogType" value={catalogType} />
                   <input type="hidden" name="id" value={selectedId ?? ""} />
@@ -567,38 +613,23 @@
             class="editor-form"
             method="POST"
             action={isCreating ? "?/create" : "?/save"}
-            use:enhance={() => {
-              saving = true
-              saveError = ""
-              saveMessage = ""
-              return async ({ result, update }) => {
-                await update({ reset: false })
-                saving = false
-                if (result.type === "success") {
-                  const response = result.data as {
-                    record?: Record<string, unknown>
-                    message?: string
-                  }
-                  if (response.record) {
-                    selectedId = Number(response.record.id)
-                    isCreating = false
-                    assignDraft(response.record as CatalogRecord)
-                  }
-                  saveMessage = response.message ?? "Changes saved."
-                } else if (result.type === "failure") {
-                  const response = result.data as { error?: unknown }
-                  saveError = String(
-                    response.error ?? "Could not save these changes.",
-                  )
-                }
-              }
-            }}
+            use:enhance={saveEnhance}
           >
             <input type="hidden" name="catalogType" value={catalogType} />
             {#if !isCreating}<input
                 type="hidden"
                 name="id"
                 value={selectedId ?? ""}
+              />{/if}
+            {#if draft.rollingDeadline === true || draft.openUnknown === true}<input
+                type="hidden"
+                name="deadline"
+                value=""
+              />{/if}
+            {#if draft.openUnknown === true}<input
+                type="hidden"
+                name="openDate"
+                value=""
               />{/if}
             <input
               type="hidden"
@@ -653,23 +684,39 @@
                         >{String(draft[field.key] ?? "")}</textarea
                       >
                     {:else}
-                      <input
-                        id={`field-${field.key}`}
-                        name={field.key}
-                        type={field.kind === "date"
-                          ? "date"
-                          : field.kind === "url"
-                            ? "url"
-                            : "text"}
-                        value={field.kind === "date"
-                          ? dateInputValue(draft[field.key])
-                          : String(draft[field.key] ?? "")}
-                        required={field.key === "name" ||
-                          (field.key === "primary_link" &&
-                            catalogType === "scholarships")}
-                        oninput={(event) =>
-                          updateText(field.key, event.currentTarget.value)}
-                      />
+                      <div
+                        class="field-input-wrap"
+                        class:date-inactive={isDateInactive(field.key)}
+                      >
+                        <input
+                          id={`field-${field.key}`}
+                          name={field.key}
+                          type={field.kind === "date"
+                            ? "date"
+                            : field.kind === "url"
+                              ? "url"
+                              : "text"}
+                          value={field.kind === "date"
+                            ? dateInputValue(draft[field.key])
+                            : String(draft[field.key] ?? "")}
+                          required={field.key === "name" ||
+                            (field.key === "primary_link" &&
+                              catalogType === "scholarships")}
+                          disabled={isDateInactive(field.key)}
+                          aria-describedby={isDateInactive(field.key)
+                            ? dateTooltipId(field.key)
+                            : undefined}
+                          oninput={(event) =>
+                            updateText(field.key, event.currentTarget.value)}
+                        />
+                        {#if isDateInactive(field.key)}
+                          <span
+                            id={dateTooltipId(field.key)}
+                            class="not-active-tooltip"
+                            role="tooltip">Not active</span
+                          >
+                        {/if}
+                      </div>
                     {/if}
                     {#if field.hint}<small class="field-hint"
                         >{field.hint}</small
@@ -768,7 +815,7 @@
                           : `award-row ${award.mode}`}
                       >
                         <label>
-                          <span>Place</span>
+                          <span>Place (if there's multiple tiers to winning it)</span>
                           <input
                             type="number"
                             min="1"
@@ -1297,6 +1344,51 @@
     min-width: 0;
   }
 
+  .field-input-wrap {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .date-inactive {
+    cursor: not-allowed;
+  }
+
+  .date-inactive input {
+    background: #efefef;
+    color: #777;
+    cursor: not-allowed;
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  .not-active-tooltip {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: rgba(43, 37, 36, 0.94);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate(-50%, -40%);
+    transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  }
+
+  .date-inactive:hover .not-active-tooltip,
+  .date-inactive:focus-within .not-active-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -50%);
+  }
+
   .field input,
   .field textarea,
   .field select,
@@ -1680,6 +1772,7 @@
     .grade-chip,
     .small-button,
     .remove-button,
+    .not-active-tooltip,
     .choice-card {
       animation: none;
       transition: none;
