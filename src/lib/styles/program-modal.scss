@@ -12,6 +12,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 18px;
     align-items: start;
+    min-width: 0;
     padding: 0 44px 18px 0;
 
     @if $header-divider {
@@ -80,12 +81,14 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
+    min-width: 0;
   }
 
   .detail-tile {
     display: grid;
     align-content: start;
     gap: 7px;
+    min-width: 0;
     min-height: 82px;
     padding: 12px;
     border: 1px solid $nav-border;
@@ -105,6 +108,7 @@
     color: $text;
     font-size: 0.95rem;
     line-height: 1.28;
+    overflow-wrap: anywhere;
   }
 
   .modal-content-grid {
@@ -112,11 +116,13 @@
     grid-template-columns: minmax(0, 1fr) minmax(190px, 0.38fr);
     gap: 14px;
     align-items: start;
+    min-width: 0;
   }
 
   .modal-section {
     display: grid;
     gap: 10px;
+    min-width: 0;
     padding: 16px;
     border: 1px solid rgba(199, 115, 115, 0.12);
     border-radius: 16px;
@@ -222,6 +228,7 @@
     color: var(--text);
     font-size: 1rem;
     line-height: 1.65;
+    overflow-wrap: anywhere;
   }
 
   .primary-link {

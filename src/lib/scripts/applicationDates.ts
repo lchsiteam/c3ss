@@ -15,9 +15,9 @@ const compareAscending = (first: number | null, second: number | null) => {
 export const parseApplicationDate = (value: string | null | undefined) => {
   if (!value) return null
 
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  const date = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  const calendarDate = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(value)
+  const date = calendarDate
+    ? new Date(Number(calendarDate[1]), Number(calendarDate[2]) - 1, Number(calendarDate[3]))
     : new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
 }

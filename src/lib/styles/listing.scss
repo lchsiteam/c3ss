@@ -120,6 +120,7 @@
 @mixin results {
   .scholarship-grid {
     display: grid;
+    min-width: 0;
     gap: 14px;
     margin: 18px 0 32px;
   }
@@ -141,8 +142,10 @@
   }
 
   .scholarship-card-slot {
+    width: 100%;
+    min-width: 0;
     transition: opacity 160ms ease;
-    max-width: 75vw;
+    max-width: 100%;
     animation: card-entrance 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--card-enter-delay);
   }
