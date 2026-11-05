@@ -66,7 +66,11 @@
       ...(openDateHint ? { hint: openDateHint } : {}),
     },
     { key: "rollingDeadline", label: "Rolling deadline", kind: "checkbox" },
-    { key: "openUnknown", label: "Application date not released", kind: "checkbox" },
+    {
+      key: "openUnknown",
+      label: "Application date not released",
+      kind: "checkbox",
+    },
   ]
 
   const scholarshipFields: Field[] = [
@@ -194,10 +198,10 @@
 
   const dateTooltipId = (key: string) => `field-${key}-not-active`
 
-  const readFilterList = (value: unknown): string[] => {
+  const readFilterList = (value: string): string[] => {
     if (typeof value === "string") {
       try {
-        value = JSON.parse(value) as unknown
+        value = JSON.parse(value)
       } catch {
         return [value]
       }
@@ -271,7 +275,10 @@
     deleteError = ""
   }
 
-  const emptyDraft = (type: CatalogType, today: string): Record<string, unknown> =>
+  const emptyDraft = (
+    type: CatalogType,
+    today: string,
+  ): Record<string, unknown> =>
     type === "scholarships"
       ? {
           name: "",
@@ -567,369 +574,381 @@
               <small>ID {record.id}</small>
             </button>
           {:else}
-            <p class="no-results">Sorry, we couldn't find any results for that search :(</p>
+            <p class="no-results">
+              Sorry, we couldn't find any results for that search :(
+            </p>
           {/each}
         </div>
       </aside>
 
-      {#key `${catalogType}-${isCreating ? "new" : selectedId ?? "empty"}`}
-      <section class="editor-panel" aria-label="Listing editor">
-        {#if draft}
-          <div class="editor-heading">
-            <div>
-              <h2>{String(draft.name ?? "Untitled listing")}</h2>
-            </div>
-            {#if !isCreating}
-              <div class="editor-tools">
-                <span class="record-id">ID {selectedId}</span>
-                <form
-                  class="delete-form"
-                  method="POST"
-                  action="?/delete"
-                  onsubmit={confirmDelete}
-                  use:enhance={deleteEnhance}
-                >
-                  <input type="hidden" name="catalogType" value={catalogType} />
-                  <input type="hidden" name="id" value={selectedId ?? ""} />
-                  <button class="delete-button" type="submit" disabled={deleting || !data.canSave}>
-                    {deleting ? "Removing…" : "Delete listing"}
-                  </button>
-                </form>
+      {#key `${catalogType}-${isCreating ? "new" : (selectedId ?? "empty")}`}
+        <section class="editor-panel" aria-label="Listing editor">
+          {#if draft}
+            <div class="editor-heading">
+              <div>
+                <h2>{String(draft.name ?? "Untitled listing")}</h2>
               </div>
+              {#if !isCreating}
+                <div class="editor-tools">
+                  <span class="record-id">ID {selectedId}</span>
+                  <form
+                    class="delete-form"
+                    method="POST"
+                    action="?/delete"
+                    onsubmit={confirmDelete}
+                    use:enhance={deleteEnhance}
+                  >
+                    <input
+                      type="hidden"
+                      name="catalogType"
+                      value={catalogType}
+                    />
+                    <input type="hidden" name="id" value={selectedId ?? ""} />
+                    <button
+                      class="delete-button"
+                      type="submit"
+                      disabled={deleting || !data.canSave}
+                    >
+                      {deleting ? "Removing…" : "Delete listing"}
+                    </button>
+                  </form>
+                </div>
+              {/if}
+            </div>
+
+            {#if deleteError}
+              <p class="message error" role="alert">{deleteError}</p>
             {/if}
-          </div>
 
-          {#if deleteError}
-            <p class="message error" role="alert">{deleteError}</p>
-          {/if}
+            {#if !data.canSave}
+              <p class="message error" role="alert">
+                Add a private Supabase server key to enable saving.
+              </p>
+            {/if}
 
-          {#if !data.canSave}
-            <p class="message error" role="alert">
-              Add a private Supabase server key to enable saving.
-            </p>
-          {/if}
-
-          <form
-            class="editor-form"
-            method="POST"
-            action={isCreating ? "?/create" : "?/save"}
-            use:enhance={saveEnhance}
-          >
-            <input type="hidden" name="catalogType" value={catalogType} />
-            {#if !isCreating}<input
-                type="hidden"
-                name="id"
-                value={selectedId ?? ""}
-              />{/if}
-            {#if draft.rollingDeadline === true || draft.openUnknown === true}<input
-                type="hidden"
-                name="deadline"
-                value=""
-              />{/if}
-            {#if draft.openUnknown === true}<input
-                type="hidden"
-                name="openDate"
-                value=""
-              />{/if}
-            <input
-              type="hidden"
-              name="filters"
-              value={JSON.stringify(selectedFilters)}
-            />
-            <input
-              type="hidden"
-              name="availableGrades"
-              value={JSON.stringify(selectedGrades)}
-            />
-            {#if catalogType === "scholarships"}
+            <form
+              class="editor-form"
+              method="POST"
+              action={isCreating ? "?/create" : "?/save"}
+              use:enhance={saveEnhance}
+            >
+              <input type="hidden" name="catalogType" value={catalogType} />
+              {#if !isCreating}<input
+                  type="hidden"
+                  name="id"
+                  value={selectedId ?? ""}
+                />{/if}
+              {#if draft.rollingDeadline === true || draft.openUnknown === true}<input
+                  type="hidden"
+                  name="deadline"
+                  value=""
+                />{/if}
+              {#if draft.openUnknown === true}<input
+                  type="hidden"
+                  name="openDate"
+                  value=""
+                />{/if}
               <input
                 type="hidden"
-                name="endowment"
-                value={JSON.stringify(awardPayload())}
+                name="filters"
+                value={JSON.stringify(selectedFilters)}
               />
-            {/if}
+              <input
+                type="hidden"
+                name="availableGrades"
+                value={JSON.stringify(selectedGrades)}
+              />
+              {#if catalogType === "scholarships"}
+                <input
+                  type="hidden"
+                  name="endowment"
+                  value={JSON.stringify(awardPayload())}
+                />
+              {/if}
 
-            <div class="field-grid">
-              {#each fields as field (field.key)}
-                <div
-                  class="field"
-                  class:wide={field.wide}
-                  class:checkbox-field={field.kind === "checkbox"}
-                >
-                  {#if field.kind === "checkbox"}
-                    <label class="checkbox-label">
-                      <input
-                        type="checkbox"
-                        name={field.key}
-                        checked={draft[field.key] === true}
-                        onchange={(event) =>
-                          updateCheckbox(
-                            field.key,
-                            event.currentTarget.checked,
-                          )}
-                      />
-                      <span>{field.label}</span>
-                    </label>
-                  {:else}
-                    <label for={`field-${field.key}`}>{field.label}</label>
-                    {#if field.kind === "textarea"}
-                      <textarea
-                        id={`field-${field.key}`}
-                        name={field.key}
-                        rows="5"
-                        required={field.key === "description" &&
-                          catalogType === "scholarships"}
-                        oninput={(event) =>
-                          updateText(field.key, event.currentTarget.value)}
-                        >{String(draft[field.key] ?? "")}</textarea
-                      >
-                    {:else}
-                      <div
-                        class="field-input-wrap"
-                        class:date-inactive={isDateInactive(field.key)}
-                      >
+              <div class="field-grid">
+                {#each fields as field (field.key)}
+                  <div
+                    class="field"
+                    class:wide={field.wide}
+                    class:checkbox-field={field.kind === "checkbox"}
+                  >
+                    {#if field.kind === "checkbox"}
+                      <label class="checkbox-label">
                         <input
+                          type="checkbox"
+                          name={field.key}
+                          checked={draft[field.key] === true}
+                          onchange={(event) =>
+                            updateCheckbox(
+                              field.key,
+                              event.currentTarget.checked,
+                            )}
+                        />
+                        <span>{field.label}</span>
+                      </label>
+                    {:else}
+                      <label for={`field-${field.key}`}>{field.label}</label>
+                      {#if field.kind === "textarea"}
+                        <textarea
                           id={`field-${field.key}`}
                           name={field.key}
-                          type={field.kind === "date"
-                            ? "date"
-                            : field.kind === "url"
-                              ? "url"
-                              : "text"}
-                          value={field.kind === "date"
-                            ? dateInputValue(draft[field.key])
-                            : String(draft[field.key] ?? "")}
-                          required={field.key === "name" ||
-                            (field.key === "primary_link" &&
-                              catalogType === "scholarships")}
-                          disabled={isDateInactive(field.key)}
-                          aria-describedby={isDateInactive(field.key)
-                            ? dateTooltipId(field.key)
-                            : undefined}
+                          rows="5"
+                          required={field.key === "description" &&
+                            catalogType === "scholarships"}
                           oninput={(event) =>
                             updateText(field.key, event.currentTarget.value)}
-                        />
-                        {#if isDateInactive(field.key)}
-                          <span
-                            id={dateTooltipId(field.key)}
-                            class="not-active-tooltip"
-                            role="tooltip">Not active</span
-                          >
-                        {/if}
-                      </div>
+                          >{String(draft[field.key] ?? "")}</textarea
+                        >
+                      {:else}
+                        <div
+                          class="field-input-wrap"
+                          class:date-inactive={isDateInactive(field.key)}
+                        >
+                          <input
+                            id={`field-${field.key}`}
+                            name={field.key}
+                            type={field.kind === "date"
+                              ? "date"
+                              : field.kind === "url"
+                                ? "url"
+                                : "text"}
+                            value={field.kind === "date"
+                              ? dateInputValue(draft[field.key])
+                              : String(draft[field.key] ?? "")}
+                            required={field.key === "name" ||
+                              (field.key === "primary_link" &&
+                                catalogType === "scholarships")}
+                            disabled={isDateInactive(field.key)}
+                            aria-describedby={isDateInactive(field.key)
+                              ? dateTooltipId(field.key)
+                              : undefined}
+                            oninput={(event) =>
+                              updateText(field.key, event.currentTarget.value)}
+                          />
+                          {#if isDateInactive(field.key)}
+                            <span
+                              id={dateTooltipId(field.key)}
+                              class="not-active-tooltip"
+                              role="tooltip">Not active</span
+                            >
+                          {/if}
+                        </div>
+                      {/if}
+                      {#if field.hint}<small class="field-hint"
+                          >{field.hint}</small
+                        >{/if}
                     {/if}
-                    {#if field.hint}<small class="field-hint"
-                        >{field.hint}</small
-                      >{/if}
-                  {/if}
-                </div>
-              {/each}
-            </div>
-
-            <section
-              class="structured-section"
-              aria-labelledby="filter-heading"
-            >
-              <div class="section-heading">
-                <div>
-                  <h3 id="filter-heading">Categories</h3>
-                </div>
-              </div>
-              <div class="option-grid">
-                {#each filterOptions as option (option.key)}
-                  <label
-                    class="choice-card"
-                    style={`--filter-color: ${option.color ?? "#7d1915"}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedFilters.includes(option.key)}
-                      onchange={(event) =>
-                        toggleFilter(option.key, event.currentTarget.checked)}
-                    />
-                    <span>
-                      <strong>{option.label}</strong>
-                      <small>{option.description}</small>
-                    </span>
-                  </label>
+                  </div>
                 {/each}
               </div>
-            </section>
 
-            <section
-              class="structured-section"
-              aria-labelledby="grades-heading"
-            >
-              <div class="section-heading">
-                <div>
-                  <h3 id="grades-heading">Eligible grades</h3>
-
-                </div>
-              </div>
-              <div class="grade-options">
-                {#each gradeOptions as grade (grade)}
-                  <label class="grade-choice">
-                    <input
-                      type="checkbox"
-                      checked={selectedGrades.includes(grade)}
-                      onchange={(event) =>
-                        toggleGrade(grade, event.currentTarget.checked)}
-                    />
-                    Grade {grade}
-                  </label>
-                {/each}
-                {#each extraGrades as grade (grade)}
-                  <button
-                    class="grade-chip"
-                    type="button"
-                    aria-label={`Remove grade ${grade}`}
-                    onclick={() => toggleGrade(grade, false)}
-                  >
-                    Grade {grade} <span aria-hidden="true">×</span>
-                  </button>
-                {/each}
-              </div>
-            </section>
-
-            {#if catalogType === "scholarships"}
               <section
                 class="structured-section"
-                aria-labelledby="awards-heading"
+                aria-labelledby="filter-heading"
               >
                 <div class="section-heading">
                   <div>
-                    <h3 id="awards-heading">Award amounts</h3>
-
+                    <h3 id="filter-heading">Categories</h3>
                   </div>
-                  <button class="small-button" type="button" onclick={addAward}
-                    >Add an award</button
-                  >
                 </div>
+                <div class="option-grid">
+                  {#each filterOptions as option (option.key)}
+                    <label
+                      class="choice-card"
+                      style={`--filter-color: ${option.color ?? "#7d1915"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedFilters.includes(option.key)}
+                        onchange={(event) =>
+                          toggleFilter(option.key, event.currentTarget.checked)}
+                      />
+                      <span>
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                    </label>
+                  {/each}
+                </div>
+              </section>
 
-                {#if awards.length}
-                  <div class="award-list">
-                    {#each awards as award, index}
-                      <div
-                        class={award.mode === "single"
-                          ? "award-row"
-                          : `award-row ${award.mode}`}
-                      >
-                        <label>
-                          <span>Place (if there's multiple tiers to winning it)</span>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            required
-                            value={award.place}
-                            oninput={(event) =>
-                              updateAward(
-                                index,
-                                "place",
-                                event.currentTarget.value,
-                              )}
-                          />
-                        </label>
-                        <label>
-                          <span>Award type</span>
-                          <select
-                            value={award.mode}
-                            onchange={(event) =>
-                              updateAward(
-                                index,
-                                "mode",
-                                event.currentTarget.value,
-                              )}
-                          >
-                            <option value="single">One amount</option>
-                            <option value="range">Amount range</option>
-                            <option value="full-tuition">Full tuition</option>
-                          </select>
-                        </label>
-                        <label>
-                          <span
-                            >{award.mode === "single"
-                              ? "Amount (USD)"
-                              : "Minimum (USD)"}</span
-                          >
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            required
-                            value={award.minimum}
-                            oninput={(event) =>
-                              updateAward(
-                                index,
-                                "minimum",
-                                event.currentTarget.value,
-                              )}
-                          />
-                        </label>
-                        {#if award.mode === "range"}
+              <section
+                class="structured-section"
+                aria-labelledby="grades-heading"
+              >
+                <div class="section-heading">
+                  <div>
+                    <h3 id="grades-heading">Eligible grades</h3>
+                  </div>
+                </div>
+                <div class="grade-options">
+                  {#each gradeOptions as grade (grade)}
+                    <label class="grade-choice">
+                      <input
+                        type="checkbox"
+                        checked={selectedGrades.includes(grade)}
+                        onchange={(event) =>
+                          toggleGrade(grade, event.currentTarget.checked)}
+                      />
+                      Grade {grade}
+                    </label>
+                  {/each}
+                  {#each extraGrades as grade (grade)}
+                    <button
+                      class="grade-chip"
+                      type="button"
+                      aria-label={`Remove grade ${grade}`}
+                      onclick={() => toggleGrade(grade, false)}
+                    >
+                      Grade {grade} <span aria-hidden="true">×</span>
+                    </button>
+                  {/each}
+                </div>
+              </section>
+
+              {#if catalogType === "scholarships"}
+                <section
+                  class="structured-section"
+                  aria-labelledby="awards-heading"
+                >
+                  <div class="section-heading">
+                    <div>
+                      <h3 id="awards-heading">Award amounts</h3>
+                    </div>
+                    <button
+                      class="small-button"
+                      type="button"
+                      onclick={addAward}>Add an award</button
+                    >
+                  </div>
+
+                  {#if awards.length}
+                    <div class="award-list">
+                      {#each awards as award, index}
+                        <div
+                          class={award.mode === "single"
+                            ? "award-row"
+                            : `award-row ${award.mode}`}
+                        >
                           <label>
-                            <span>Maximum (USD)</span>
+                            <span
+                              >Place (if there's multiple tiers to winning it)</span
+                            >
                             <input
                               type="number"
-                              min={award.minimum || "0"}
+                              min="1"
                               step="1"
                               required
-                              value={award.maximum}
+                              value={award.place}
                               oninput={(event) =>
                                 updateAward(
                                   index,
-                                  "maximum",
+                                  "place",
                                   event.currentTarget.value,
                                 )}
                             />
                           </label>
-                        {:else if award.mode === "full-tuition"}
-                          <p class="tuition-note">Up to full tuition</p>
-                        {/if}
-                        <button
-                          class="remove-button"
-                          type="button"
-                          onclick={() => removeAward(index)}>Remove</button
-                        >
-                      </div>
-                    {/each}
-                  </div>
-                {:else}
-                  <p class="no-awards">No award amounts have been added.</p>
-                {/if}
-              </section>
-            {/if}
+                          <label>
+                            <span>Award type</span>
+                            <select
+                              value={award.mode}
+                              onchange={(event) =>
+                                updateAward(
+                                  index,
+                                  "mode",
+                                  event.currentTarget.value,
+                                )}
+                            >
+                              <option value="single">One amount</option>
+                              <option value="range">Amount range</option>
+                              <option value="full-tuition">Full tuition</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span
+                              >{award.mode === "single"
+                                ? "Amount (USD)"
+                                : "Minimum (USD)"}</span
+                            >
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              required
+                              value={award.minimum}
+                              oninput={(event) =>
+                                updateAward(
+                                  index,
+                                  "minimum",
+                                  event.currentTarget.value,
+                                )}
+                            />
+                          </label>
+                          {#if award.mode === "range"}
+                            <label>
+                              <span>Maximum (USD)</span>
+                              <input
+                                type="number"
+                                min={award.minimum || "0"}
+                                step="1"
+                                required
+                                value={award.maximum}
+                                oninput={(event) =>
+                                  updateAward(
+                                    index,
+                                    "maximum",
+                                    event.currentTarget.value,
+                                  )}
+                              />
+                            </label>
+                          {:else if award.mode === "full-tuition"}
+                            <p class="tuition-note">Up to full tuition</p>
+                          {/if}
+                          <button
+                            class="remove-button"
+                            type="button"
+                            onclick={() => removeAward(index)}>Remove</button
+                          >
+                        </div>
+                      {/each}
+                    </div>
+                  {:else}
+                    <p class="no-awards">No award amounts have been added.</p>
+                  {/if}
+                </section>
+              {/if}
 
-            {#if saveError}<p class="message error" role="alert">
-                {saveError}
-              </p>{/if}
-            {#if saveMessage}<p class="message success" role="status">
-                {saveMessage}
-              </p>{/if}
+              {#if saveError}<p class="message error" role="alert">
+                  {saveError}
+                </p>{/if}
+              {#if saveMessage}<p class="message success" role="status">
+                  {saveMessage}
+                </p>{/if}
 
-            <div class="save-row">
-              <button
-                class="primary-button"
-                type="submit"
-                disabled={saving || !data.canSave}
-              >
-                {saving
-                  ? isCreating
-                    ? "Creating…"
-                    : "Saving…"
-                  : isCreating
-                    ? "Create listing"
-                    : "Save changes"}
-              </button>
+              <div class="save-row">
+                <button
+                  class="primary-button"
+                  type="submit"
+                  disabled={saving || !data.canSave}
+                >
+                  {saving
+                    ? isCreating
+                      ? "Creating…"
+                      : "Saving…"
+                    : isCreating
+                      ? "Create listing"
+                      : "Save changes"}
+                </button>
+              </div>
+            </form>
+          {:else}
+            <div class="empty-editor">
+              <h2>Select a listing</h2>
+              <p>Choose a record from the list to edit its fields.</p>
             </div>
-          </form>
-        {:else}
-          <div class="empty-editor">
-            <h2>Select a listing</h2>
-            <p>Choose a record from the list to edit its fields.</p>
-          </div>
-        {/if}
-      </section>
+          {/if}
+        </section>
       {/key}
     </div>
   {/if}
@@ -1108,8 +1127,14 @@
     background: rgba(212, 38, 32, 0.07);
     color: $primary;
     cursor: pointer;
-    font: 800 0.78rem/1 "Inter", system-ui, sans-serif;
-    transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+    font:
+      800 0.78rem/1 "Inter",
+      system-ui,
+      sans-serif;
+    transition:
+      transform 140ms ease,
+      background 140ms ease,
+      box-shadow 140ms ease;
   }
 
   .delete-button:hover:not(:disabled) {
@@ -1153,7 +1178,10 @@
       800 0.87rem/1 "Inter",
       system-ui,
       sans-serif;
-    transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    transition:
+      transform 140ms ease,
+      border-color 140ms ease,
+      background 140ms ease;
   }
 
   .catalog-tabs button:hover {
@@ -1210,7 +1238,10 @@
       800 0.84rem/1.2 "Inter",
       system-ui,
       sans-serif;
-    transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+    transition:
+      transform 140ms ease,
+      background 140ms ease,
+      box-shadow 140ms ease;
   }
 
   .new-record-button:hover,
@@ -1248,7 +1279,10 @@
     cursor: pointer;
     text-align: left;
     overflow-wrap: anywhere;
-    transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    transition:
+      transform 140ms ease,
+      border-color 140ms ease,
+      background 140ms ease;
   }
 
   .record-option:hover,
@@ -1379,7 +1413,10 @@
     visibility: hidden;
     pointer-events: none;
     transform: translate(-50%, -40%);
-    transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    transition:
+      opacity 120ms ease,
+      transform 120ms ease,
+      visibility 120ms ease;
   }
 
   .date-inactive:hover .not-active-tooltip,
@@ -1396,7 +1433,10 @@
   .award-row,
   .small-button,
   .remove-button {
-    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      background 140ms ease;
   }
 
   .field.wide {
@@ -1552,7 +1592,9 @@
     background: rgba(125, 25, 21, 0.07);
     color: $primary;
     cursor: pointer;
-    transition: transform 140ms ease, background 140ms ease;
+    transition:
+      transform 140ms ease,
+      background 140ms ease;
   }
 
   .grade-chip:hover {

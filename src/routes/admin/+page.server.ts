@@ -38,7 +38,7 @@ const isAuthenticated = (cookie: string | undefined) => {
   return expected.length === received.length && timingSafeEqual(expected, received)
 }
 
-const setAdminCookie = (cookies: ActionEvent['cookies']) => {
+const doTheAdminCookie = (cookies: ActionEvent['cookies']) => {
   const expiresAt = String(Date.now() + SESSION_DURATION_SECONDS * 1000)
   cookies.set(SESSION_COOKIE, `${expiresAt}.${signSession(expiresAt)}`, {
     httpOnly: true,
@@ -57,7 +57,7 @@ const passwordMatches = (candidate: string, expected: string) => {
 
 const privilegedKey = () => env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY
 
-const createSupabaseClient = () =>
+const makeSupabaseClient = () =>
   createClient(
     PUBLIC_SUPABASE_URL,
     privilegedKey() || PUBLIC_SUPABASE_PUBLISHABLE_KEY,
@@ -78,7 +78,7 @@ const writeAccessFailure = (cookies: ActionEvent['cookies']) => {
   return null
 }
 
-const parseJsonField = (form: FormData, field: string, label = field) => {
+const parseJSONField = (form: FormData, field: string, label = field) => {
   const value = form.get(field)
   if (typeof value !== 'string') throw new Error(`Missing ${label}.`)
 
@@ -127,7 +127,7 @@ const readGrades = (grades: unknown, allowNull: boolean) => {
   if (allowNull && grades === null) return null
   if (!isIntegerArray(grades)) {
     const suffix = allowNull ? ', or null' : ''
-    throw new Error(`Available grades must be a JSON array of whole numbers${suffix}.`)
+    throw new Error(`The grades must be a JSON array of whole numbers${suffix}`)
   }
   return grades
 }
@@ -156,10 +156,10 @@ const isAward = (value: unknown) => {
 const isAwardList = (value: unknown) => Array.isArray(value) && value.every(isAward)
 
 const buildListing = (form: FormData, type: CatalogType) => {
-  const filterValues = parseJsonField(form, 'filters', 'Filters')
-  const gradeValues = parseJsonField(form, 'availableGrades', 'Available grades')
+  const filterValues = parseJSONField(form, 'filters', 'Filters')
+  const gradeValues = parseJSONField(form, 'availableGrades', 'Available grades')
   const endowment = type === 'scholarships'
-    ? parseJsonField(form, 'endowment', 'Awards')
+    ? parseJSONField(form, 'endowment', 'Awards')
     : null
 
   if (!isStringArray(filterValues)) throw new Error('Choose valid filters.')
@@ -225,7 +225,7 @@ const saveListing = async (event: ActionEvent, mode: WriteMode) => {
     return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields.' })
   }
 
-  const supabase = createSupabaseClient()
+  const supabase = makeSupabaseClient()
   const table = tableFor(type)
   const result = mode === 'create'
     ? await supabase.from(table).insert(values).select('*').single()
@@ -261,7 +261,7 @@ export const load: PageServerLoad = async ({ cookies, setHeaders }) => {
   const loginConfigured = Boolean(env.ADMIN_PASSWORD)
   if (!authenticated) return { authenticated: false, loginConfigured }
 
-  const supabase = createSupabaseClient()
+  const supabase = makeSupabaseClient()
   const [scholarships, summerPrograms] = await Promise.all([
     supabase.from('scholarships').select('*').order('name'),
     supabase.from('summerprograms').select('*').order('name')
@@ -291,7 +291,7 @@ export const actions: Actions = {
       return fail(401, { error: 'That password did not match.' })
     }
 
-    setAdminCookie(cookies)
+    doTheAdminCookie(cookies)
     return { success: true }
   },
 
@@ -313,7 +313,7 @@ export const actions: Actions = {
     const id = idFromForm(form)
     if (id === null) return fail(400, { error: 'Choose a valid record.' })
 
-    const { data, error } = await createSupabaseClient()
+    const { data, error } = await makeSupabaseClient()
       .from(tableFor(type))
       .delete()
       .eq('id', id)
