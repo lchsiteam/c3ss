@@ -525,7 +525,7 @@
       <p class="message error" role="alert">{data.loadError}</p>
     {/if}
 
-    <div class="catalog-tabs" role="tablist" aria-label="Catalog type">
+    <div class="catalog-tabs" role="tablist">
       <button
         type="button"
         class:active={catalogType === "scholarships"}
@@ -1514,7 +1514,6 @@
     border: 1px solid color-mix(in srgb, var(--filter-color) 38%, transparent);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.76);
-    box-shadow: inset 3px 0 var(--filter-color);
     cursor: pointer;
   }
 
@@ -1799,25 +1798,6 @@
     .save-row {
       align-items: stretch;
       flex-direction: column;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .admin-page,
-    .editor-panel,
-    .record-option,
-    .primary-button,
-    .quiet-button,
-    .delete-button,
-    .new-record-button,
-    .catalog-tabs button,
-    .grade-chip,
-    .small-button,
-    .remove-button,
-    .not-active-tooltip,
-    .choice-card {
-      animation: none;
-      transition: none;
     }
   }
 </style>

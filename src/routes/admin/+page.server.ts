@@ -237,18 +237,18 @@ const saveListing = async (event: ActionEvent, mode: WriteMode) => {
       : `Admin update failed for ${table} record ${id}:`
     console.error(logMessage, result.error.message)
     const message = mode === 'create'
-      ? 'The database could not create this listing. Check the fields and try again.'
-      : 'The database rejected this change. Check the values and try again.'
+      ? 'The database could not create this listing check the fields and try again.'
+      : 'The database rejected this change check the values and try again.'
     return fail(500, { error: message })
   }
 
   if (mode === 'save' && !result.data) {
-    return fail(404, { error: 'That record could not be found. Refresh and select it again.' })
+    return fail(404, { error: 'That record could not be found refresh and select it again.' })
   }
 
   return {
     success: true,
-    message: mode === 'create' ? 'Listing created.' : 'Changes saved to the database.',
+    message: mode === 'create' ? 'Listing created.' : 'Changes saved to the database',
     record: result.data as ScholarshipDTO | SummerDTO,
     catalogType: type
   }
