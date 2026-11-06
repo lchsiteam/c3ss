@@ -22,9 +22,7 @@ const tableFor = (type: CatalogType) =>
   type === 'scholarships' ? 'scholarships' : 'summerprograms'
 
 const sessionKey = () => env.ADMIN_SESSION_SECRET || env.ADMIN_PASSWORD || ''
-
-const signSession = (expiresAt: string) =>
-  createHmac('sha256', sessionKey()).update(`c3ss-admin:${expiresAt}`).digest('base64url')
+const signSession = (expiresAt: string) => createHmac('sha256', sessionKey()).update(`c3ss-admin:${expiresAt}`).digest('base64url')
 
 const isAuthenticated = (cookie: string | undefined) => {
   if (!cookie || !sessionKey()) return false
@@ -64,7 +62,7 @@ const makeSupabaseClient = () =>
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-const writeAccessFailure = (cookies: ActionEvent['cookies']) => {
+const noAccessFailed = (cookies: ActionEvent['cookies']) => {
   if (!isAuthenticated(cookies.get(SESSION_COOKIE))) {
     return fail(401, { error: 'Your admin session expired. Sign in again.' })
   }
@@ -78,7 +76,7 @@ const writeAccessFailure = (cookies: ActionEvent['cookies']) => {
   return null
 }
 
-const parseJSONField = (form: FormData, field: string, label = field) => {
+const parseFormThing = (form: FormData, field: string, label = field) => {
   const value = form.get(field)
   if (typeof value !== 'string') throw new Error(`Missing ${label}.`)
 
@@ -156,10 +154,10 @@ const isAward = (value: unknown) => {
 const isAwardList = (value: unknown) => Array.isArray(value) && value.every(isAward)
 
 const buildListing = (form: FormData, type: CatalogType) => {
-  const filterValues = parseJSONField(form, 'filters', 'Filters')
-  const gradeValues = parseJSONField(form, 'availableGrades', 'Available grades')
+  const filterValues = parseFormThing(form, 'filters', 'Filters')
+  const gradeValues = parseFormThing(form, 'availableGrades', 'Available grades')
   const endowment = type === 'scholarships'
-    ? parseJSONField(form, 'endowment', 'Awards')
+    ? parseFormThing(form, 'endowment', 'Awards')
     : null
 
   if (!isStringArray(filterValues)) throw new Error('Choose valid filters.')
@@ -208,21 +206,21 @@ const idFromForm = (form: FormData) => {
 }
 
 const saveListing = async (event: ActionEvent, mode: WriteMode) => {
-  const accessFailure = writeAccessFailure(event.cookies)
+  const accessFailure = noAccessFailed(event.cookies)
   if (accessFailure) return accessFailure
 
   const form = await event.request.formData()
   const type = catalogFromForm(form)
-  if (!type) return fail(400, { error: 'Choose a valid catalog.' })
+  if (!type) return fail(400, { error: 'Choose a valid catalog' })
 
   const id = mode === 'save' ? idFromForm(form) : null
-  if (mode === 'save' && id === null) return fail(400, { error: 'Choose a valid record.' })
+  if (mode === 'save' && id === null) return fail(400, { error: 'Choose a valid record' })
 
   let values: Record<string, unknown>
   try {
     values = buildListing(form, type)
   } catch (error) {
-    return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields.' })
+    return fail(400, { error: error instanceof Error ? error.message : 'Check the submitted fields' })
   }
 
   const supabase = makeSupabaseClient()
@@ -237,13 +235,13 @@ const saveListing = async (event: ActionEvent, mode: WriteMode) => {
       : `Admin update failed for ${table} record ${id}:`
     console.error(logMessage, result.error.message)
     const message = mode === 'create'
-      ? 'The database could not create this listing check the fields and try again.'
-      : 'The database rejected this change check the values and try again.'
+      ? 'The database could not create this listing check the fields and try again'
+      : 'The database rejected this change check the values and try again'
     return fail(500, { error: message })
   }
 
   if (mode === 'save' && !result.data) {
-    return fail(404, { error: 'That record could not be found refresh and select it again.' })
+    return fail(404, { error: 'That record could not be found refresh and select it again' })
   }
 
   return {
@@ -276,7 +274,7 @@ export const load: PageServerLoad = async ({ cookies, setHeaders }) => {
     canSave: Boolean(privilegedKey()),
     scholarships: (scholarships.data ?? []) as ScholarshipDTO[],
     summerPrograms: (summerPrograms.data ?? []) as SummerDTO[],
-    loadError: errors.length ? 'Could not load one or more catalog lists from the database.' : null
+    loadError: errors.length ? 'Could not load one or more catalog lists from the database' : null
   }
 }
 
@@ -286,9 +284,9 @@ export const actions: Actions = {
     const candidate = form.get('password')
     const expected = env.ADMIN_PASSWORD
 
-    if (!expected) return fail(503, { error: 'Admin access is not configured on the server.' })
+    if (!expected) return fail(503, { error: 'Admin access not configured because devs are udmb' })
     if (typeof candidate !== 'string' || !passwordMatches(candidate, expected)) {
-      return fail(401, { error: 'That password did not match.' })
+      return fail(401, { error: 'Password failed try again please' })
     }
 
     doTheAdminCookie(cookies)
@@ -303,15 +301,15 @@ export const actions: Actions = {
   create: (event) => saveListing(event, 'create'),
 
   delete: async ({ request, cookies }) => {
-    const accessFailure = writeAccessFailure(cookies)
+    const accessFailure = noAccessFailed(cookies)
     if (accessFailure) return accessFailure
 
     const form = await request.formData()
     const type = catalogFromForm(form)
-    if (!type) return fail(400, { error: 'Choose a valid catalog.' })
+    if (!type) return fail(400, { error: 'Choose a valid' })
 
     const id = idFromForm(form)
-    if (id === null) return fail(400, { error: 'Choose a valid record.' })
+    if (id === null) return fail(400, { error: 'Choose a valid record' })
 
     const { data, error } = await makeSupabaseClient()
       .from(tableFor(type))
@@ -322,9 +320,9 @@ export const actions: Actions = {
 
     if (error) {
       console.error(`Admin delete failed for ${tableFor(type)} record ${id}:`, error.message)
-      return fail(500, { error: 'The database could not remove this listing.' })
+      return fail(500, { error: 'Sorry the listing failed to removed' })
     }
-    if (!data) return fail(404, { error: 'That record could not be found. Refresh and try again.' })
+    if (!data) return fail(404, { error: 'Couldn\'t be found, try again' })
 
     return { success: true, deletedId: id, catalogType: type }
   },
