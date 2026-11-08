@@ -3,7 +3,7 @@
   import type { SubmitFunction } from "@sveltejs/kit"
   import type { PageData } from "./$types"
   import {
-    FILTER_COLORS,
+    FILTER_COLORS, 
     filterDefinitions,
     type ScholarshipDTO,
   } from "$lib/scripts/scholarships"
@@ -30,6 +30,19 @@
     minimum: string
     maximum: string
   }
+  type AwardPayload = {
+    place: number
+    amount: number | [number, number | "full-tuition"]
+  }
+  type DraftValue =
+    | string
+    | number
+    | boolean
+    | null
+    | string[]
+    | number[]
+    | AwardPayload[]
+  type Draft = Record<string, DraftValue>
 
   let { data }: { data: PageData } = $props()
   let catalogType = $state<CatalogType>("scholarships")
