@@ -53,7 +53,7 @@ const passwordMatches = (candidate: string, expected: string) => {
   return timingSafeEqual(candidateHash, expectedHash)
 }
 
-const privilegedKey = () => env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY
+const privilegedKey = () => env.SUPABASE_SECRET_KEY
 
 const makeSupabaseClient = () =>
   createClient(
