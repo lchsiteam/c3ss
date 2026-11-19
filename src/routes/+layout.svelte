@@ -5,7 +5,7 @@
 
   const error = "https://forms.gle/Tg79A2oLBQWeXDpr7"
 
-  let { children } = $props<{ children: () => unknown }>()
+  let { children } = $props()
 
   injectAnalytics({ mode: dev ? "development" : "production" })
 </script>
@@ -62,9 +62,9 @@
 <style lang="scss">
   @use "$lib/styles/global.scss" as *;
 
-  *,
-  *::before,
-  *::after {
+  :global(*),
+  :global(*::before),
+  :global(*::after) {
     box-sizing: border-box;
   }
 
@@ -191,6 +191,17 @@
   .page {
     margin-top: 28px;
     width: 100%;
+    animation: page-enter 360ms ease-out both;
+  }
+
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 
   .report-issue {
@@ -260,6 +271,13 @@
   }
 
   @media (max-width: 720px) {
+    .app-shell {
+      width: calc(100% - 32px);
+      max-width: none;
+      padding-top: 16px;
+      padding-bottom: 48px;
+    }
+
     .topbar {
       flex-direction: column;
       align-items: flex-start;
@@ -278,10 +296,16 @@
     }
   }
 
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
+  @media (prefers-reduced-motion: reduce) {
+    .page {
+      animation: none;
+    }
+
+    .nav-link,
+    .report-issue,
+    .report-label {
+      transition: none;
+    }
   }
 
   span.credit {

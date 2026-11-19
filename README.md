@@ -9,6 +9,9 @@ This application was written in SvelteKit, and utilizes Supabase on the database
 bun i
 bun dev
 ```
-The environment variables aren't in the gitignore so you can access the database without any secrets. (<-- this will change in the future, dw)
 DM us on discord with any questions, concerns, or additions!
  itest
+
+## Admin catalog editor
+
+The `/admin` page uses `ADMIN_PASSWORD` for sign-in. To enable database edits, configure `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY` as a private server environment variable. Never expose this key through a `PUBLIC_` variable. `ADMIN_SESSION_SECRET` can be set to use a separate key for signing the eight-hour admin session cookie; if omitted, the admin password is used.
