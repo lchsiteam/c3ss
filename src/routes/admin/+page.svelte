@@ -259,7 +259,7 @@
   }
 
   const assignDraft = (record: CatalogRecord) => {
-    const recordValues = record as unknown as Record<string, unknown>
+    const recordValues = record as Record<string, unknown>
     draft = {
       ...recordValues,
       rollingDeadline:
@@ -881,8 +881,8 @@
                           <label>
                             <span
                               >{award.mode === "single"
-                                ? "Amount (USD)"
-                                : "Minimum (USD)"}</span
+                                ? "Amount"
+                                : "Minimum"}</span
                             >
                             <input
                               type="number"
